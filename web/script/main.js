@@ -79,7 +79,7 @@
 			// }
 		}
 		async function exportProject() {
-			let zip = project;
+			let zip = project.toZip();
 			let dataBuffer = await zip.generateAsync({
 				type: 'arrayBuffer',
 			});
@@ -700,7 +700,6 @@
 						form.initialValue.setValue(JSON.stringify(q0));
 						systemFunction.f = f;
 						systemFunction.render = render;
-						console.log(f, render);
 					}
 					let playButton = $e('div');
 					let pasteButton = $e('div');
