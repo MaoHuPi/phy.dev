@@ -1,8 +1,19 @@
 (() => {
 	const clearVarList = [];
-	function clearVarAll() {
-		for (let clearVar of clearVarList) {
-			clearVar();
+	const shared = {
+		clearVarAll: function clearVarAll() {
+			for (let clearVar of clearVarList) {
+				clearVar();
+			}
+		}
+	};
+	function share(dictOfFunction) {
+		for (let key in dictOfFunction) {
+			if (key === 'clearVar') {
+				clearVarList.push(dictOfFunction.clearVar);
+			} else {
+				shared[key] = dictOfFunction[key];
+			}
 		}
 	}
 
@@ -51,19 +62,20 @@
 		}
 		window.addEventListener('click', hideContextMenu);
 		return { showContextMenu }
-	} let { showContextMenu } = contextMenuSystem();
+	} share(contextMenuSystem());
 
-	let project = new JSZip();
+	let project = new Project();
+	window.project = project;
 	let projectName = 'project.phy';
-	function projectSystem({ clearVarAll }) {
+	function projectSystem(shared) {
 		let { saveFile, openFile } = fileIOInit({ changeProjectName, importProject });
 		async function importProject(file) {
 			// let lastProject = project;
 			// if (project !== lastProject) {
 			let zip = await JSZip.loadAsync(file);
-			project = zip;
+			project = Project.fromZip(zip);
 			window.project = project;
-			clearVarAll();
+			shared.clearVarAll();
 			// }
 		}
 		async function exportProject() {
@@ -77,7 +89,7 @@
 			projectName = newName;
 		}
 		function newProject() {
-			clearVarAll();
+			shared.clearVarAll();
 			project = new JSZip();
 			window.fileEntry = undefined;
 		}
@@ -111,7 +123,7 @@
 				}
 			}
 		});
-	} projectSystem({ clearVarAll });
+	} projectSystem(shared);
 
 	function component() {
 		let draggingList = [];
@@ -143,7 +155,264 @@
 		});
 	} component();
 
-	function attributeSystem() {
+	function fileSystem(shared) {
+		let folderPath = [];
+		let focusedFile = undefined; /* as path */
+		let openedFilePath = undefined; /* as flag */
+		let cutFilePath = undefined; /* as flag */
+		let copiedFile = undefined; /* as path */
+		let copiedFileType = undefined;
+		function path2string(path) { return path.length == 0 ? '' : (path.join('/') + '/') }
+		function path2regexp(path) { return new RegExp(path.length == 0 ? '' : ('^' + path2string(path))) }
+		function cancelHandeler_copyAndCut(event) {
+			if (event.key == 'Escape') {
+				event.preventDefault();
+				cutFilePath = undefined;
+				copiedFile = undefined;
+				copiedFileType = undefined;
+				document.removeEventListener('keydown', cancelHandeler_copyAndCut);
+				folderPathChanged();
+			}
+		}
+		function newFileElement(type, name) {
+			let file = $e('div');
+			let icon = $e('div');
+			let title = $e('div');
+			icon.className = 'icon';
+			title.className = 'title';
+			title.innerText = name;
+			file.setAttribute('type', type);
+			file.appendChild(icon);
+			file.appendChild(title);
+			let openThis = () => {
+				focusedFile = file;
+
+				if (type == 'folder') {
+					folderPath.push(name);
+				} else {
+					openedFilePath = path2string(folderPath) + name;
+					shared.openSubFile(type, path2string(folderPath) + name);
+				}
+				folderPathChanged();
+			}
+			file.addEventListener('dblclick', openThis);
+			file.addEventListener('contextmenu', event => {
+				event.preventDefault();
+				event.stopPropagation();
+				shared.showContextMenu(event.pageX, event.pageY, {
+					open: openThis,
+					rename: () => { renameSubFile(file); },
+					copy: () => {
+						if (cutFilePath || copiedFile) {
+							cutFilePath = undefined;
+							copiedFile = undefined;
+							copiedFileType = undefined;
+							document.removeEventListener('keydown', cancelHandeler_copyAndCut);
+						}
+						copiedFile = path2string(folderPath) + name;
+						copiedFileType = type;
+					},
+					cut: () => {
+						if (cutFilePath || copiedFile) {
+							cutFilePath = undefined;
+							copiedFile = undefined;
+							copiedFileType = undefined;
+							document.removeEventListener('keydown', cancelHandeler_copyAndCut);
+						}
+						cutFilePath = path2string(folderPath) + name;
+						copiedFile = cutFilePath;
+						copiedFileType = type;
+						document.addEventListener('keydown', cancelHandeler_copyAndCut);
+						folderPathChanged();
+					},
+					delete: () => {
+						project[type == 'folder' ? 'removeFolder' : 'removeFile'](path2string(folderPath) + name);
+						folderPathChanged();
+					},
+				});
+			});
+			return file;
+		}
+		function folderPathChanged() {
+			if (folderPath.length == 0 || project.hasFolder(folderPath.join('/'))) {
+				$('#folderPathBar-path').value = ['Φ', ...folderPath, ''].join('/');
+				// show folder content
+				let fileGrid = $('#fileGrid');
+				fileGrid.innerHTML = '';
+
+				let pathString = path2string(folderPath);
+				let pathRegexp = path2regexp(folderPath);
+				let filePathList = project.searchFile(pathRegexp);
+				let folderPathList = project.searchFolder(pathRegexp);
+				let fileDataList = [];
+				let folderNameList = folderPathList
+					.map(folder => folder.replace(pathString, '').replace('/', ''))
+					.filter(name => name !== '');
+				filePathList.map(filePath => [filePath.replace(pathString, ''), project.getFile(filePath)]).forEach(fileData => {
+					if (!fileData[0].includes('/')) {
+						fileDataList.push(fileData);
+					}
+				});
+				filePathList = [];
+				folderPathList = [];
+				folderNameList.forEach(folderName => {
+					let fileElement = newFileElement('folder', folderName);
+					let wholePath = path2string(folderPath) + folderName;
+					if (cutFilePath && cutFilePath.includes(folderName) && wholePath == cutFilePath) {
+						fileElement.setAttribute('cut', '');
+					}
+					fileGrid.appendChild(fileElement);
+				});
+				fileDataList.forEach(([fileName, file]) => {
+					let fileTypeData = {
+						[SystemFile]: 'system',
+						[DataFile]: 'data',
+						[ImageFile]: 'image',
+					};
+					if (file.type in fileTypeData) {
+						let fileElement = newFileElement(fileTypeData[file.type], fileName);
+						let wholePath = path2string(folderPath) + fileName;
+						if (openedFilePath && openedFilePath.includes(fileName) && wholePath == openedFilePath) {
+							fileElement.setAttribute('focused', '');
+						}
+						if (cutFilePath && cutFilePath.includes(fileName) && wholePath == cutFilePath) {
+							fileElement.setAttribute('cut', '');
+						}
+						fileGrid.appendChild(fileElement);
+					}
+				});
+			} else {
+				folderPath = [];
+				folderPathChanged();
+			}
+		} folderPathChanged();
+		function fileModeChanged() {
+			let fileMode = $('[name="fileModeSwitcher"]:checked').id.split('-')[1];
+			$('#fileGrid').setAttribute('mode', fileMode);
+		} fileModeChanged();
+		function renameSubFile(fileElement) {
+			let title = $('div.title', fileElement);
+			let input = $e('input');
+			if (!title) {
+				$('input', fileElement)?.focus();
+				return;
+			};
+			input.className = 'title';
+			input.setAttribute('type', 'text');
+			input.value = title.innerText;
+			input.addEventListener('click', event => {
+				event.stopPropagation();
+			});
+			input.addEventListener('keydown', applyHandeler);
+			title.after(input);
+			input.focus();
+			title.remove();
+			function cancelHandeler(event) {
+				if (event.type == 'keydown' && event.key == 'Escape') {
+					event.preventDefault();
+					input.after(title);
+					input.remove();
+					removeHandeler();
+				}
+			}
+			function applyHandeler(event) {
+				if (event.type == 'click' || (event.type == 'keydown' && event.key == 'Enter')) {
+					let newName = input.value;
+					let folderPathString = path2string(folderPath);
+					if (fileElement.getAttribute('type') == 'folder') {
+						project.moveFolder(folderPathString + title.innerText, folderPathString + newName);
+					} else {
+						project.moveFile(folderPathString + title.innerText, folderPathString + newName);
+					}
+					removeHandeler();
+					folderPathChanged();
+				}
+			}
+			function removeHandeler() {
+				window.removeEventListener('click', applyHandeler);
+				document.removeEventListener('keydown', cancelHandeler);
+			}
+			window.addEventListener('click', applyHandeler);
+			document.addEventListener('keydown', cancelHandeler);
+		}
+		$('#fileBackButton').addEventListener('click', () => {
+			if (folderPath.length > 0) folderPath.pop();
+			folderPathChanged();
+		});
+		$('#folderPathBar-path').addEventListener('change', () => {
+			let pathText = $('#folderPathBar-path').value;
+			targetPath = pathText.split('/');
+			if (targetPath[0] == 'Φ') targetPath.shift();
+			if (targetPath[targetPath.length - 1] == '') targetPath.pop();
+			if (targetPath.length == 0 || project.hasFolder(targetPath.join('/'))) {
+				folderPath = targetPath;
+			}
+			folderPathChanged();
+		});
+		$$('[name="fileModeSwitcher"]').forEach(radio => {
+			radio.addEventListener('change', () => {
+				fileModeChanged();
+			})
+		});
+		fileGrid.addEventListener('contextmenu', event => {
+			event.preventDefault();
+			shared.showContextMenu(event.pageX, event.pageY, {
+				'new system': () => {
+					let fileName = `system-${randomId()}`;
+					project.getFile(path2string(folderPath) + fileName, SystemFile).content = `
+					function f(t, q) {
+						let q_dot = [];
+						// equations of q[i] and q_dot[i] 
+						return q_dot;
+					}
+					function render(cvs, ctx, t, q) {
+						let [w, h] = [1920, 1080];
+						[cvs.width, cvs.height] = [w, h];
+						ctx.fillStyle = 'black';
+						ctx.fillRect(0, 0, w, h);
+						// draw the frame
+					}
+					`;
+					folderPathChanged();
+					let findTitle = $$('div > div.title', fileGrid).filter(title => title.innerText == fileName);
+					if (findTitle.length == 1) {
+						renameSubFile(findTitle[0].parentNode);
+					}
+				},
+				paste: () => {
+					if (copiedFile) {
+						if (copiedFile == cutFilePath) {
+							let copiedFilePathSplit = copiedFile.split('/');
+							let name = copiedFilePathSplit[copiedFilePathSplit.length - 1];
+							copiedFileType
+							if (copiedFileType == 'folder') {
+								project.moveFolder(copiedFile, path2string(folderPath) + name);
+							} else {
+								project.moveFile(copiedFile, path2string(folderPath) + name);
+							}
+							folderPathChanged();
+							cutFilePath = undefined;
+							copiedFile = undefined;
+							copiedFileType = undefined;
+							document.removeEventListener('keydown', cancelHandeler_copyAndCut);
+						} else {
+							// copy
+
+						}
+					}
+				}
+			});
+		});
+		function clearVar() {
+			folderPath = [];
+			focusedFile = undefined;
+			cutFilePath = undefined;
+			folderPathChanged();
+		}
+		return { clearVar, folderPathChanged }
+	} share(fileSystem(shared));
+
+	function attributeSystem(shared) {
 		let attributePanel = $('#attributePanel');
 		let methodButtons = $('#methodButtons');
 		let attributePanelData = {
@@ -151,7 +420,7 @@
 				targetPath: {
 					type: 'input(text)',
 					label: 'data file path',
-					default: 'data.csv'
+					default: `Φ/data-test`
 				},
 				storageMethod: {
 					type: 'switch',
@@ -367,7 +636,7 @@
 			attributePanel.innerHTML = '';
 			methodButtons.innerHTML = '';
 			let cvs = $('#viewCanvas');
-			[cvs.width, cvs.height] = [1080, 1920];
+			[cvs.width, cvs.height] = [1920, 1080];
 			cvs.style.setProperty('--frameWidth', cvs.width);
 			cvs.style.setProperty('--frameHeight', cvs.height);
 
@@ -386,68 +655,52 @@
 					attributePanel.appendChild(element);
 				}
 			}
+
+			// button
 			let inheritAttribute = ['calculateMethod', 'initialValue', 'hValue', 'epsilonValue'];
-			if (type == 'system') {
-				form.storageMethod.addEventListener('change', function () {
-					if (this.getValue() == 'continue') {
-						inheritAttribute.forEach(attributeName => { form[attributeName].readOnly(); });
-						let targetPath = tidyTargetPath(form.targetPath.getValue());
-						let metaFile = project.file(targetPath + '.meta');
-						if (metaFile) {
-							metaFile.async('string')
-								.then(text => {
-									let data;
-									try {
-										data = JSON.parse(text);
-									} catch (error) { }
-									if (data) {
-										for (let key of inheritAttribute) {
-											if (key in data) {
-												form[key].setValue(data[key]);
-											}
+			switch (type) {
+				case 'system':
+					// attribute
+					form.storageMethod.addEventListener('change', function () {
+						if (this.getValue() == 'continue') {
+							inheritAttribute.forEach(attributeName => { form[attributeName].readOnly(); });
+							let targetPath = tidyTargetPath(form.targetPath.getValue());
+							let dataFile = project.getFile(targetPath);
+							if (dataFile) {
+								let data;
+								try {
+									data = JSON.parse(dataFile.meta);
+								} catch (error) { }
+								if (data) {
+									for (let key of inheritAttribute) {
+										if (key in data) {
+											form[key].setValue(data[key]);
 										}
-									}
-								});
-						}
-					} else {
-						inheritAttribute.forEach(attributeName => { form[attributeName].writeable(); });
-					}
-				});
-			} else if (type == 'data') {
-				let metaFile = project.file(path + '.meta');
-				if (metaFile) {
-					metaFile.async('string')
-						.then(text => {
-							let data;
-							try {
-								data = JSON.parse(text);
-							} catch (error) { }
-							if (data) {
-								for (let key in form) {
-									if (key in data && key !== 'targetPath') {
-										form[key].setValue(data[key]);
 									}
 								}
 							}
-						});
-				}
-				form.targetPath.setValue('Φ/' + path);
-			}
-			// button
-			switch (type) {
-				case 'system':
-					let systemFile = project.file(path);
+						} else {
+							inheritAttribute.forEach(attributeName => { form[attributeName].writeable(); });
+						}
+					});
+					// button
+					let systemFile = project.getFile(path);
 					let systemFunction = { f: undefined, render: undefined };
 					if (systemFile) {
-						systemFile.async('string')
-							.then(text => {
-								let { f, render } = new Function(`
-									${text}
-									return({f, render});
-								`)();
-								systemFunction.f = f;
-								systemFunction.render = render;
-							});
+						let { q0, f, render } = new Function(`
+						    var q0 = [0];
+							function f(t, q) { return q; }
+							function render(cvs, ctx, t, q){}
+
+							${systemFile.content}
+
+							return({q0, f, render});
+						`)();
+						systemFunction.q0 = q0;
+						form.initialValue.setValue(JSON.stringify(q0));
+						systemFunction.f = f;
+						systemFunction.render = render;
+						console.log(f, render);
 					}
 					let playButton = $e('div');
 					let pasteButton = $e('div');
@@ -463,17 +716,15 @@
 									formValue[key] = form[key].getValue();
 								}
 
-
-								if (formValue.targetPath == '') {
+								let dataFile = project.getFile(formValue.targetPath);
+								if (formValue.targetPath == '' || (dataFile && dataFile.type !== DataFile)) {
 									formValue.targetPath = `data-${randomId()}`;
-								} else if (!formValue.targetPath.endsWith('.csv')) {
-									formValue.targetPath = formValue.targetPath + '.csv';
 								}
 
 								formValue.targetPath = tidyTargetPath(formValue.targetPath);
 								form.targetPath.setValue(formValue.targetPath);
 								if (formValue.outputMode.includes('record')) {
-									project.file(formValue.targetPath + '.meta', JSON.stringify(formValue));
+									project.getFile(formValue.targetPath, DataFile).meta = JSON.stringify(formValue);
 								}
 
 
@@ -481,12 +732,11 @@
 								let startTime = 0;
 								let lastCsv = undefined;
 								if (formValue.storageMethod == 'continue') {
-									let metaFile = project.file(formValue.targetPath + '.meta');
-									if (metaFile) {
-										let text = await metaFile.async('string');
+									let subFile = project.getFile(formValue.targetPath);
+									if (subFile) {
 										let data;
 										try {
-											data = JSON.parse(text);
+											data = JSON.parse(subFile.meta);
 										} catch (error) { }
 										if (data) {
 											for (let key of inheritAttribute) {
@@ -497,9 +747,9 @@
 											}
 										}
 									}
-									let dataFile = project.file(formValue.targetPath);
+									let dataFile = project.getFile(formValue.targetPath);
 									if (dataFile) {
-										let csv = await dataFile.async('string');
+										let csv = dataFile.content;
 										lastCsv = csv;
 										let data = csv.split('\n');
 										data = data[data.length - 1].split(',').map(s => parseFloat(s));
@@ -523,12 +773,14 @@
 										let localPlayButton = playButton;
 										result = await localJob;
 										if (!localJob.stoppedFlag) {
-											project.file(formValue.targetPath, (lastCsv ? lastCsv + '\n' : '') + array2csv(result.csv));
+											let dataFile = project.getFile(formValue.targetPath, DataFile);
+											dataFile.content = (lastCsv ? lastCsv + '\n' : '') + array2csv(result.csv);
 											formValue.hValue = result.h;
 											form.hValue.setValue(result.h);
-											project.file(formValue.targetPath + '.meta', JSON.stringify(formValue));
+											dataFile.meta = JSON.stringify(formValue);
 											localPlayButton.value = false;
 											localPlayButton.innerText = 'start';
+											shared.folderPathChanged();
 											alert('Done!');
 										}
 									})();
@@ -556,17 +808,19 @@
 											frame = function () {
 												let result = localJob.next();
 												if (result.done || localJob.stoppedFlag) {
-													project.file(formValue.targetPath, (lastCsv ? lastCsv + '\n' : '') + array2csv(dataArray));
+													let dataFile = project.getFile(formValue.targetPath, DataFile);
+													dataFile.content = (lastCsv ? lastCsv + '\n' : '') + array2csv(dataArray);
 													formValue.hValue = hValue;
 													form.hValue.setValue(hValue);
-													project.file(formValue.targetPath + '.meta', JSON.stringify(formValue));
-													[cvs.width, cvs.height] = [1080, 1920];
+													dataFile.meta = JSON.stringify(formValue);
+													[cvs.width, cvs.height] = [1920, 1080];
 													cvs.style.setProperty('--frameWidth', cvs.width);
 													cvs.style.setProperty('--frameHeight', cvs.height);
 													if (localPlayButton.value) {
 														localPlayButton.value = false;
 														localPlayButton.innerText = 'start';
 													}
+													shared.folderPathChanged();
 												} else {
 													dataArray.push(result.value.row);
 													hValue = result.value.h;
@@ -583,7 +837,7 @@
 											frame = function () {
 												let result = localJob.next();
 												if (result.done || localJob.stoppedFlag) {
-													[cvs.width, cvs.height] = [1080, 1920];
+													[cvs.width, cvs.height] = [1920, 1080];
 													cvs.style.setProperty('--frameWidth', cvs.width);
 													cvs.style.setProperty('--frameHeight', cvs.height);
 													if (localPlayButton.value) {
@@ -604,14 +858,16 @@
 											frame = function () {
 												let result = localJob.next();
 												if (result.done || localJob.stoppedFlag) {
-													project.file(formValue.targetPath, array2csv(dataArray));
+													let dataFile = project.getFile(formValue.targetPath, DataFile);
+													dataFile.content = array2csv(dataArray);
 													formValue.hValue = hValue;
 													form.hValue.setValue(hValue);
-													project.file(formValue.targetPath + '.meta', JSON.stringify(formValue));
+													dataFile.content.meta = JSON.stringify(formValue);
 													if (localPlayButton.value) {
 														localPlayButton.value = false;
 														localPlayButton.innerText = 'start';
 													}
+													shared.folderPathChanged();
 												} else {
 													dataArray.push(result.value.row);
 													hValue = result.value.h;
@@ -629,7 +885,7 @@
 								}
 								playButton.innerText = 'start';
 								let cvs = $('#viewCanvas');
-								[cvs.width, cvs.height] = [1080, 1920];
+								[cvs.width, cvs.height] = [1920, 1080];
 								cvs.style.setProperty('--frameWidth', cvs.width);
 								cvs.style.setProperty('--frameHeight', cvs.height);
 							}
@@ -658,6 +914,23 @@
 					methodButtons.appendChild(pasteButton);
 					break;
 				case 'data':
+					// attribute
+					let dataFile = project.getFile(path);
+					if (dataFile) {
+						let data;
+						try {
+							data = JSON.parse(dataFile.meta);
+						} catch (error) { }
+						if (data) {
+							for (let key in form) {
+								if (key in data && key !== 'targetPath') {
+									form[key].setValue(data[key]);
+								}
+							}
+						}
+					}
+					form.targetPath.setValue('Φ/' + path);
+					// button
 					let copyButton = $e('div');
 					copyButton.innerText = 'copy';
 					copyButton.addEventListener('click', () => {
@@ -673,262 +946,5 @@
 		}
 		methodButtons
 		return { openSubFile };
-	} let { openSubFile } = attributeSystem();
-
-	function fileSystem({ openSubFile, showContextMenu }) {
-		let folderPath = [];
-		let focusedFile = undefined; /* as path */
-		let openedFilePath = undefined; /* as flag */
-		let cutFilePath = undefined; /* as flag */
-		let copiedFile = undefined; /* as path */
-		function path2string(path) { return path.length == 0 ? '' : (path.join('/') + '/') }
-		function path2regexp(path) { return new RegExp(path.length == 0 ? '' : ('^' + path2string(path))) }
-		function folderExist(folderPath) {
-			return Object.keys(project.files).filter(path => path.includes(path2string(folderPath))).length
-		}
-		function cancelHandeler_copyAndCut(event) {
-			if (event.key == 'Escape') {
-				event.preventDefault();
-				copiedFile = undefined;
-				cutFilePath = undefined;
-				document.removeEventListener('keydown', cancelHandeler_copyAndCut);
-				folderPathChanged();
-			}
-		}
-		function newFileElement(type, name) {
-			let file = $e('div');
-			let icon = $e('div');
-			let title = $e('div');
-			icon.className = 'icon';
-			title.className = 'title';
-			title.innerText = name;
-			file.setAttribute('type', type);
-			file.appendChild(icon);
-			file.appendChild(title);
-			let openThis = () => {
-				if (focusedFile) {
-					focusedFile.removeAttribute('focused');
-				}
-				file.setAttribute('focused', '');
-				focusedFile = file;
-
-				if (type == 'folder') {
-					folderPath.push(name);
-					folderPathChanged();
-				} else {
-					openedFilePath = path2string(folderPath) + name;
-					openSubFile(type, path2string(folderPath) + name);
-				}
-			}
-			file.addEventListener('dblclick', openThis);
-			file.addEventListener('contextmenu', event => {
-				event.preventDefault();
-				event.stopPropagation();
-				showContextMenu(event.pageX, event.pageY, {
-					open: openThis,
-					rename: () => { renameSubFile(file); },
-					copy: () => {
-						if (cutFilePath || copiedFile) {
-							cutFilePath = undefined;
-							copiedFile = undefined;
-							document.removeEventListener('keydown', cancelHandeler_copyAndCut);
-						}
-						copiedFile = path2string(folderPath) + name;
-					},
-					cut: () => {
-						if (cutFilePath || copiedFile) {
-							cutFilePath = undefined;
-							copiedFile = undefined;
-							document.removeEventListener('keydown', cancelHandeler_copyAndCut);
-						}
-						cutFilePath = path2string(folderPath) + name;
-						copiedFile = cutFilePath;
-						document.addEventListener('keydown', cancelHandeler_copyAndCut);
-						folderPathChanged();
-					},
-					delete: () => {
-						project.remove(path2string(folderPath) + name);
-						folderPathChanged();
-					},
-				});
-			});
-			return file;
-		}
-		function folderPathChanged() {
-			if (folderPath.length == 0 || folderExist(folderPath)) {
-				$('#folderPathBar-path').value = ['Φ', ...folderPath, ''].join('/');
-				// show folder content
-				let fileGrid = $('#fileGrid');
-				fileGrid.innerHTML = '';
-
-				let pathString = path2string(folderPath);
-				let pathRegexp = path2regexp(folderPath);
-				let fileList = project.file(pathRegexp);
-				let folderList = project.folder(pathRegexp);
-				let fileNameList = [];
-				let folderNameList = folderList
-					.map(folder => folder.name.replace(pathString, '').replace('/', ''))
-					.filter(name => name !== '');
-				fileList.map(file => file.name.replace(pathString, '')).forEach(fileName => {
-					if (fileName.includes('/')) {
-						let folderName = fileName.split('/')[0];
-						if (!folderNameList.includes(folderName)) {
-							folderNameList.push(folderName);
-						}
-					} else {
-						fileNameList.push(fileName);
-					}
-				});
-				fileList = [];
-				folderList = [];
-				folderNameList.forEach(folderName => {
-					let fileElement = newFileElement('folder', folderName);
-					let wholePath = path2string(folderPath) + folderName;
-					if (cutFilePath && cutFilePath.includes(folderName) && wholePath == cutFilePath) {
-						fileElement.setAttribute('cut', '');
-					}
-					fileGrid.appendChild(fileElement);
-				});
-				fileNameList.forEach(fileName => {
-					let fileNameSlice = fileName.split('.');
-					let fileTypeData = {
-						js: 'system',
-						csv: 'data',
-						jpg: 'image',
-						jpeg: 'image',
-						png: 'image',
-					};
-					let extensionName = fileNameSlice[fileNameSlice.length - 1].toLowerCase();
-					if (extensionName in fileTypeData) {
-						let fileElement = newFileElement(fileTypeData[extensionName], fileName);
-						let wholePath = path2string(folderPath) + fileName;
-						if (openedFilePath && openedFilePath.includes(fileName) && wholePath == openedFilePath) {
-							fileElement.setAttribute('focused', '');
-						}
-						if (cutFilePath && cutFilePath.includes(fileName) && wholePath == cutFilePath) {
-							fileElement.setAttribute('cut', '');
-						}
-						fileGrid.appendChild(fileElement);
-					}
-				});
-			} else {
-				folderPath = [];
-				folderPathChanged();
-			}
-		} folderPathChanged();
-		function fileModeChanged() {
-			let fileMode = $('[name="fileModeSwitcher"]:checked').id.split('-')[1];
-			$('#fileGrid').setAttribute('mode', fileMode);
-		} fileModeChanged();
-		function renameSubFile(fileElement) {
-			let title = $('div.title', fileElement);
-			let input = $e('input');
-			input.className = 'title';
-			input.setAttribute('type', 'text');
-			input.value = title.innerText;
-			input.addEventListener('click', event => {
-				event.stopPropagation();
-			});
-			input.addEventListener('keydown', applyHandeler);
-			title.after(input);
-			input.focus();
-			title.remove();
-			function cancelHandeler(event) {
-				if (event.type == 'keydown' && event.key == 'Escape') {
-					event.preventDefault();
-					input.after(title);
-					input.remove();
-					removeHandeler();
-				}
-			}
-			function applyHandeler(event) {
-				if (event.type == 'click' || (event.type == 'keydown' && event.key == 'Enter')) {
-					let newName = input.value;
-					let folderPathString = path2string(folderPath);
-					project.renameAsync(folderPathString + title.innerText + '.meta', folderPathString + newName + '.meta');
-					project.renameAsync(folderPathString + title.innerText, folderPathString + newName).then(() => {
-						folderPathChanged();
-					});
-					removeHandeler();
-				}
-			}
-			function removeHandeler() {
-				window.removeEventListener('click', applyHandeler);
-				document.removeEventListener('keydown', cancelHandeler);
-			}
-			window.addEventListener('click', applyHandeler);
-			document.addEventListener('keydown', cancelHandeler);
-		}
-		$('#fileBackButton').addEventListener('click', () => {
-			if (folderPath.length > 0) folderPath.pop();
-			folderPathChanged();
-		});
-		$('#folderPathBar-path').addEventListener('change', () => {
-			let pathText = $('#folderPathBar-path').value;
-			targetPath = pathText.split('/');
-			if (targetPath[0] == 'Φ') targetPath.shift();
-			if (targetPath[targetPath.length - 1] == '') targetPath.pop();
-			if (targetPath.length == 0 || folderExist(targetPath)) {
-				folderPath = targetPath;
-			}
-			folderPathChanged();
-		});
-		$$('[name="fileModeSwitcher"]').forEach(radio => {
-			radio.addEventListener('change', () => {
-				fileModeChanged();
-			})
-		});
-		fileGrid.addEventListener('contextmenu', event => {
-			event.preventDefault();
-			showContextMenu(event.pageX, event.pageY, {
-				'new system': () => {
-					let fileName = `system-${randomId()}.js`;
-					project.file(path2string(folderPath) + fileName, `
-					function f(t, q) {
-						let q_dot = [];
-						// equations of q[i] and q_dot[i] 
-						return q_dot;
-					}
-					function render(cvs, ctx, t, q) {
-						let [w, h] = [1920, 1080];
-						[cvs.width, cvs.height] = [w, h];
-						ctx.fillStyle = 'black';
-						ctx.fillRect(0, 0, w, h);
-						// draw the frame
-					}
-					`);
-					folderPathChanged();
-					let findTitle = $$('div > div.title', fileGrid).filter(title => title.innerText == fileName);
-					if (findTitle.length == 1) {
-						renameSubFile(findTitle[0].parentNode);
-					}
-				},
-				paste: () => {
-					if (copiedFile) {
-						if (copiedFile == cutFilePath) {
-							let copiedFilePathSplit = copiedFile.split('/');
-							let name = copiedFilePathSplit[copiedFilePathSplit.length - 1];
-							project.renameAsync(copiedFile + '.meta', path2string(folderPath) + name + '.meta');
-							project.renameAsync(copiedFile, path2string(folderPath) + name).then(() => {
-								folderPathChanged();
-							});
-							cutFilePath = undefined;
-							copiedFile = undefined;
-							document.removeEventListener('keydown', cancelHandeler_copyAndCut);
-						} else {
-							// copy
-							
-						}
-					}
-				}
-			});
-		});
-		function clearVar() {
-			folderPath = [];
-			focusedFile = undefined;
-			cutFilePath = undefined;
-			folderPathChanged();
-		}
-		return { clearVar }
-	} clearVarList.push(fileSystem({ openSubFile, showContextMenu }).clearVar);
+	} share(attributeSystem(shared));
 })();

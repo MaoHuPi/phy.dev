@@ -31,6 +31,7 @@ function ${name}(f/*f(x, y)*/, x0, x1/*end*/, y0, h0, epsilon, calcTimes = false
     let [x, y] = [x0, y0];
     let h = h0;
     let calcCounter = 0;
+    // let warningFlag = false;
     while (calcTimes !== false ? (calcCounter < calcTimes) : (x <= x1)) {
         let TE = epsilon + 1;
         let ${new Array(r).fill(0).map((_, i) => `k${i + 1}`).join(', ')};${emb ? `
@@ -38,10 +39,14 @@ function ${name}(f/*f(x, y)*/, x0, x1/*end*/, y0, h0, epsilon, calcTimes = false
         ${emb ? '    ' : ''}${new Array(r).fill(0).map((_, i) => `k${i + 1} = arrayScalar(h, f(x + ${butcherTableau[i][0]} * h, arraySum(${['y', ...new Array(i).fill(0).map((_, j) => `arrayScalar(${butcherTableau[i][j]}, k${j + 1})`)].join(', ')})));`).join('\n                ')}${emb ? `
             TE = arrayNorm(1, arraySum(${new Array(r).fill(0).map((_, i) => `arrayScalar(${butcherTableau[r][i + 1] - butcherTableau[r + 1][i + 1]}, k${i + 1})`).join(', ')}));
             if (TE === 0 || Number.isNaN(TE)) {
-                throw Error(\`TE == \$\{TE\}\`);
-                return;
+                TE = epsilon - (1e-16);
+                // if(!warningFlag){
+                //     console.warn(\`TE == \$\{TE\}\`);
+                //     warningFlag = true;
+                // }
+            } else {
+                h = (0.9 * h * (epsilon / TE) ** (1 / 5));
             }
-            h = (0.9 * h * (epsilon / TE) ** (1 / 5));
         }` : ''}
         x = x + h;
         xList.push(x);
@@ -54,7 +59,7 @@ function ${name}(f/*f(x, y)*/, x0, x1/*end*/, y0, h0, epsilon, calcTimes = false
     );
 }
 
-// eval(butcherTableau2code('fehlberg_RK45', 'embedded', [
+// eval(butcherTableau2code('RKF45', 'embedded', [
 //     [0],
 //     [1 / 4, 1 / 4],
 //     [3 / 8, 3 / 32, 9 / 32],
@@ -70,13 +75,13 @@ function ${name}(f/*f(x, y)*/, x0, x1/*end*/, y0, h0, epsilon, calcTimes = false
 //     [, 1]
 // ]));
 
-// let data = fehlberg_RK45((t, q) => {
+// let data = RKF45((t, q) => {
 //     let g = 10, r = 1;
 //     let q_dot = [];
 //     q_dot[0] = Math.sqrt(Math.sqrt(3 * 10 * 1) ** 2 + 2 * g / r * (Math.sin(0) - Math.sin(q[0])));
 //     return q_dot;
 // }, 0, 1, [0], 0.001, 0.0001);
-// let data = fehlberg_RK45((t, q) => {
+// let data = RKF45((t, q) => {
 //     let q_dot = [];
 //     q_dot[0] = 0.25 * q[0] * (1 - q[0] / 20);
 //     return q_dot;
@@ -113,7 +118,7 @@ const RKMethodDict = {
             [1 / 2, 1 / 2],
             [, 0, 1]
         ]
-    }, 
+    },
     'exp_RK4': {
         type: 'explicit',
         tableau: [
@@ -121,9 +126,9 @@ const RKMethodDict = {
             [1 / 2, 1 / 2],
             [1 / 2, 0, 1 / 2],
             [1, 0, 0, 1],
-            [, 1/6, 1/3, 1/3, 1/6],
+            [, 1 / 6, 1 / 3, 1 / 3, 1 / 6],
         ]
-    }, 
+    },
     // 'imp_BackwardEuler': {
     //     type: 'explicit',
     //     tableau: [
