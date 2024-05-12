@@ -1,0 +1,436 @@
+/* whole */
+
+*::selection {
+	color: var(--selection-fgc);
+	background-color: var(--selection-bgc);
+}
+
+#dropMask {
+	width: 100vw;
+	height: 100vh;
+	pointer-events: none;
+	background-color: transparent;
+}
+#dropMask[dragover="true"] {
+	background-color: black;
+}
+
+#contextMenu {
+	--optionNum: 0;
+	--option-height: 30px;
+	width: 200px;
+	height: calc(var(--option-height) * var(--optionNum));
+	position: fixed;
+	background: var(--contextMenu-bgc);
+	border: var(--contextMenu-border);
+	border-radius: 5px;
+	box-shadow: var(--contextMenu-shadow);
+	overflow: hidden;
+	opacity: 0;
+	pointer-events: none;
+}
+#contextMenu[show] {
+	opacity: 1;
+	pointer-events: auto;
+}
+#contextMenu > div {
+	padding: 0px 10px;
+	width: 100%;
+	height: var(--option-height);
+	color: var(--contextMenu-fgc);
+	line-height: var(--option-height);
+	text-overflow: ellipsis;
+	text-wrap: nowrap;
+	font-size: 18px;
+	background: var(--contextMenu-bgc);
+	overflow: hidden;
+}
+#contextMenu > div:hover {
+	background: var(--contextMenu-bgc-hover);
+}
+
+#panelGrid {
+	--resizeBar-l-tb: 0.65;
+	--resizeBar-rl: 0.7;
+	display: grid;
+	grid-template-rows: calc(100vh * var(--resizeBar-l-tb) - var(--resizeBar-width) / 2) var(--resizeBar-width) calc(100vh * (1 - var(--resizeBar-l-tb)) - var(--resizeBar-width) / 2);
+	grid-template-columns: calc(100vw * var(--resizeBar-rl) - var(--resizeBar-width) / 2) var(--resizeBar-width) calc(100vw * (1 - var(--resizeBar-rl)) - var(--resizeBar-width) / 2);
+	width: 100vw;
+	height: 100vh;
+	overflow: hidden;
+}
+
+[id|="area"] {
+	overflow: hidden;
+}
+#area-lt {
+	grid-area: 1/1/2/2;
+}
+#area-lb {
+	grid-area: 3/1/4/2;
+}
+#area-r {
+	grid-area: 1/3/4/4;
+}
+
+[id|="resizeBar"] {
+	transition: 0.5s;
+}
+[id|="resizeBar"][type="vertical"] {
+	background: var(--resizeBar-bgc-vertical);
+	border: var(--resizeBar-border-vertical);
+	cursor: ew-resize;
+}
+[id|="resizeBar"][type="vertical"]:hover {
+	background: var(--resizeBar-bgc-vertical-hover);
+	border: var(--resizeBar-border-vertical-hover);
+}
+[id|="resizeBar"][type="horizontal"] {
+	background: var(--resizeBar-bgc-horizontal);
+	border: var(--resizeBar-border-horizontal);
+	cursor: ns-resize;
+}
+[id|="resizeBar"][type="horizontal"]:hover {
+	background: var(--resizeBar-bgc-horizontal-hover);
+	border: var(--resizeBar-border-horizontal-hover);
+}
+
+#resizeBar-l-tb {
+	grid-area: 2/1/3/2;
+}
+#resizeBar-rl {
+	grid-area: 1/2/4/3;
+}
+
+/* area lt */
+
+#area-lt {
+	--controlPanel-height-system: 0px;
+	--controlPanel-height-data: 100px;
+	--controlPanel-height-image: 80px;
+	--controlPanel-height: var(--controlPanel-height-system);
+	position: relative;
+}
+
+#viewport {
+	--viewport-width: calc(100vw * var(--resizeBar-rl) - var(--resizeBar-width) / 2);
+	--viewport-height: calc(100vh * var(--resizeBar-l-tb) - var(--resizeBar-width) / 2  - var(--controlPanel-height));
+	position: relative;
+	width: var(--viewport-width);
+	height: var(--viewport-height);
+}
+#viewCanvas {
+	--frameWidth: 1920;
+	--frameHeight: 1080;
+	width: min(calc(var(--viewport-height) * var(--frameWidth) / var(--frameHeight)), var(--viewport-width));
+    height: min(calc(var(--viewport-width) / var(--frameWidth) * var(--frameHeight)), var(--viewport-height));
+	position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+#controlPanel {
+	height: var(--controlPanel-height);
+}
+
+/* area lb */
+
+#area-lb {
+	--folderPathBar-height: 40px;
+	--button-gap: 10px;
+	--button-size: 30px;
+	position: relative;
+}
+
+#folderPathBar {
+	height: var(--folderPathBar-height);
+	background: var(--folderPathBar-bgc);
+}
+#folderPathBar-path {
+	width: 100%;
+	height: 100%;
+	padding: 5px var(--button-gap);
+	color: var(--folderPathBar-path-fgc);
+	font-size: 20px;
+	background-color: transparent;
+}
+
+#fileBackButton {
+	position: absolute;
+	top: calc(var(--folderPathBar-height) + var(--button-gap));
+	left: var(--button-gap);
+	width: var(--button-size);
+	height: var(--button-size);
+	background-image: url('../image/back.svg');
+	background-size: 80%;
+	background-position: center;
+	background-repeat: no-repeat;
+	background-color: var(--fileButton-bgc);
+	border: var(--fileButton-border);
+	border-radius: var(--fileButton-borderRadius);
+	box-sizing: content-box;
+}
+
+#fileModeSwitcherBar {
+	position: absolute;
+	top: calc(var(--folderPathBar-height) + var(--button-size) + var(--button-gap)*2);
+	left: var(--button-gap);
+	width: var(--button-size);
+	height: calc(var(--button-size)*3);
+	background-color: var(--fileButton-bgc);
+	border: var(--fileButton-border);
+	border-radius: var(--fileButton-borderRadius);
+	box-sizing: content-box;
+	overflow: hidden;
+}
+#fileModeSwitcherBar > label[for] {
+	display: block;
+	width: var(--button-size);
+	height: var(--button-size);
+	background-size: 80%;
+	background-position: center;
+	background-repeat: no-repeat;
+}
+#fileModeSwitcherBar > input[type="radio"]:checked + label[for] {
+	background-color: var(--fileModeSwitcherBar-label-checked-bgc);
+}
+#fileModeSwitcherBar > label[for]:not(:first-of-type) {
+	border-top: var(--fileModeSwitcherBar-label-borderTop);
+	border-top-width: var(--fileModeSwitcherBar-label-borderTopWidth);
+}
+#fileModeSwitcherBar > input[type="radio"] {
+	display: none;
+}
+#fileModeSwitcherBar > label[for="fileModeSwitcher-row"] {
+	background-image: url('../image/rowView.svg');	
+}
+#fileModeSwitcherBar > label[for="fileModeSwitcher-grid"] {
+	background-image: url('../image/gridView.svg');	
+}
+#fileModeSwitcherBar > label[for="fileModeSwitcher-card"] {
+	background-image: url('../image/cardView.svg');	
+}
+
+#fileGrid {
+	height: calc(100% - var(--folderPathBar-height));
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+#fileGrid > div[type] {
+	position: relative;
+	background-color: var(--fileElement-bgc);
+}
+#fileGrid > div[type][focused] {
+	filter: var(--fileElement-focused-filter);
+}
+#fileGrid > div[type][cut] {
+	filter: var(--fileElement-cut-filter);
+}
+#fileGrid > div[type] :where(div, input[type="text"]).title {
+	color: var(--fileElement-title-fgc);
+	text-overflow: ellipsis;
+	text-wrap: nowrap;
+	overflow: hidden;
+}
+#fileGrid > div[type] div.icon {
+	background-size: 80%;
+	background-position: center;
+	background-repeat: no-repeat;
+}
+#fileGrid > div[type="folder"] div.icon {
+	background-image: url('../image/folderIcon.svg');
+}
+#fileGrid > div[type="system"] div.icon {
+	background-image: url('../image/systemIcon.svg');
+}
+#fileGrid > div[type="data"] div.icon {
+	background-image: url('../image/dataIcon.svg');
+}
+#fileGrid > div[type="image"] div.icon {
+	background-image: url('../image/imageIcon.svg');
+}
+
+#fileGrid[mode="row"] > div[type] {
+	display: block;
+	margin: 10px 20px 0px;
+    --width: calc(100% - 40px);
+    --height: 30px;
+    width: var(--width);
+    height: var(--height);
+    clip-path: none;
+    border-radius: 5px;
+}
+#fileGrid[mode="row"] > div[type]::after {
+	display: none;
+}
+#fileGrid[mode="row"] > div[type] div.icon {
+	display: inline-block;
+	position: absolute;
+	top: 0px;
+	right: 0px;
+	width: var(--height);
+	height: var(--height);
+}
+#fileGrid[mode="row"] > div[type] :where(div, input[type="text"]).title {
+	display: inline-block;
+	position: absolute;
+	top: 0px;
+	left: 0px;
+	width: calc(100% - var(--height));
+    height: var(--height);
+	font-size: 22px;
+    line-height: var(--height);
+	text-align: center;
+	background: var(--fileElement-title-bgc);
+}
+
+#fileGrid[mode="grid"] > div[type] {
+	display: inline-block;
+	margin: 20px 0px 0px 20px;
+    --width: 100px;
+    --height: 120px;
+	width: var(--width);
+    height: var(--height);
+	clip-path: polygon(0% 0%, calc(100% - var(--fileElement-dogEared-size)) 0%, 100% var(--fileElement-dogEared-size), 100% 100%, 0% 100%);
+    border-radius: 5px;
+}
+#fileGrid[mode="grid"] > div[type]::after {
+	width: var(--fileElement-dogEared-size);
+	height: var(--fileElement-dogEared-size);
+	position: absolute;
+	top: 0px;
+	right: 0px;
+    content: 'DE';
+	color: transparent;
+    background: linear-gradient(to right top, var(--fileElement-bgc) 30%, #00000088);
+    border-radius: 0px 0px 0px 5px;
+    box-shadow: 0px 0px 8px 0px black;
+	overflow: hidden;
+}
+#fileGrid[mode="grid"] > div[type] div.icon {
+	display: block;
+	width: var(--width);
+	height: var(--width);
+	position: static;
+}
+#fileGrid[mode="grid"] > div[type] :where(div, input[type="text"]).title {
+	display: block;
+	width: var(--width);
+	height: calc(var(--height) - var(--width));
+	position: static;
+	font-size: 18px;
+	line-height: calc(var(--height) - var(--width));
+	text-align: center;
+	background: var(--fileElement-title-bgc);
+}
+
+#fileGrid[mode="card"] > div[type] {
+	display: inline-block;
+	margin: 15px 0px 0px 15px;
+    --width: 250px;
+    --height: 100px;
+    width: var(--width);
+    height: var(--height);
+    clip-path: none;
+    border-radius: 5px;
+}
+#fileGrid[mode="card"] > div[type]::after {
+	display: none;
+}
+#fileGrid[mode="card"] > div[type] div.icon {
+	display: inline-block;
+    width: var(--height);
+    height: var(--height);
+}
+#fileGrid[mode="card"] > div[type] :where(div, input[type="text"]).title {
+	display: inline-block;
+    width: calc(100% - var(--height));
+    height: var(--height);
+    font-size: 22px;
+    line-height: var(--height);
+    text-align: center;
+    background: var(--fileElement-title-bgc);
+}
+
+/* area r */
+
+#area-r {
+	--methodButtons-height: 80px;
+	position: relative;
+}
+
+#attributePanel {
+	height: calc(100% - var(--methodButtons-height));
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+#attributePanel > fieldset > :where(input, select) {
+	padding: 0px 10px;
+	width: 100%;
+	height: 40px;
+	color: var(--attributePanel-input-fgc);
+	background-color: var(--attributePanel-input-bgc);
+	border: var(--attributePanel-input-border);
+}
+#attributePanel > fieldset > :where(input, select):where([readonly], [disabled]) {
+	color: var(--attributePanel-input-fgc-readonly);
+}
+#attributePanel > fieldset > div.switchBox {
+	display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-content: center;
+    justify-content: center;
+    align-items: center;
+	padding: 0px;
+	width: 100%;
+	height: 60px;
+	color: var(--attributePanel-input-fgc);
+	background-color: var(--attributePanel-input-bgc);
+	border: var(--attributePanel-input-border);
+}
+#attributePanel > fieldset > div.switchBox > input[type="radio"] {
+	display: none;
+}
+#attributePanel > fieldset > div.switchBox > label {
+	display: inline-block;
+	padding: 0px;
+	width: 100%;
+	height: 100%;
+	color: var(--attributePanel-input-fgc);
+	line-height: 60px;
+	text-align: center;
+	text-overflow: ellipsis;
+	text-wrap: nowrap;
+	background-color: var(--attributePanel-input-bgc);
+	border: var(--attributePanel-switchBoxLabel-border);
+	overflow: hidden;
+}
+#attributePanel > fieldset > div.switchBox > input[type="radio"]:checked + label {
+	border: var(--attributePanel-switchBoxLabel-border-selected);
+}
+
+#methodButtons {
+	display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-content: center;
+    justify-content: center;
+    align-items: center;
+	height: var(--methodButtons-height);
+}
+#methodButtons > div {
+	display: inline-block;
+	width: 100%;
+	height: 100%;
+	color: var(--methodButtons-button-fgc);
+	line-height: var(--methodButtons-height);
+	text-align: center;
+	background: var(--methodButtons-button-bgc);
+	transition: 0.5s;
+}
+#methodButtons > div:hover {
+	color: var(--methodButtons-button-fgc-hover);
+	background: var(--methodButtons-button-bgc-hover);
+}

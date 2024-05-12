@@ -1,0 +1,56 @@
+html {
+	--color1: #ffc354;
+	--color1_opacity: #ffc35488;
+	--color2: #be8f50;
+	--color3: #534224;
+
+	--selection-fgc: white;
+	--selection-bgc: var(--color1_opacity);
+	--bgc: #1b1b1b;
+	--scrollbar-fgc: var(--color1);
+	--scrollbar-bgc: var(--color3);
+	--contextMenu-fgc: white;
+	--contextMenu-bgc: #212121;
+	--contextMenu-bgc-hover: #303030;
+	--contextMenu-border: solid 1px black;
+	--contextMenu-shadow: 0px 0px 10px 0px black;
+	--fieldset-border: solid 2px var(--color3);
+	--legend-fgc: var(--color1);
+	--resizeBar-width: 5px;
+	--resizeBar-bgc-vertical: var(--color3);
+	--resizeBar-bgc-horizontal: var(--color3);
+	--resizeBar-bgc-vertical-hover: var(--color1);
+	--resizeBar-bgc-horizontal-hover: var(--color1);
+	--folderPathBar-bgc: #0f0f0f;
+	--fileButton-bgc: #00000088;
+	--fileButton-border: solid 2px var(--color1);
+	--fileButton-borderRadius: 5px;
+	--fileModeSwitcherBar-label-borderTopWidth: 1px;
+	--fileModeSwitcherBar-label-borderTop: solid #b6a17b;
+	--folderPathBar-path-fgc: white;
+	--fileModeSwitcherBar-label-checked-bgc: var(--color1_opacity);
+	--fileElement-bgc: var(--color2);
+	--fileElement-dogEared-size: 30px;
+	--fileElement-title-fgc: white;
+	--fileElement-title-bgc: #00000055;
+	--fileElement-focused-filter: brightness(1.3);
+	--fileElement-cut-filter: opacity(0.5);
+	--attributePanel-input-fgc: white;
+	--attributePanel-input-fgc-readonly: #ffffff88;
+	--attributePanel-input-bgc: #00000055;
+	--attributePanel-input-border: none;
+	--attributePanel-switchBoxLabel-border: solid 1px transparent;
+	--attributePanel-switchBoxLabel-border-selected: solid 1px var(--color2);
+	--methodButtons-button-fgc: white;
+	--methodButtons-button-bgc: #00000055;
+	--methodButtons-button-fgc-hover: black;
+	--methodButtons-button-bgc-hover: var(--color2);
+}
+
+html[theme="bright"] {
+	--bgc: linear-gradient(to right bottom, #ffffff, #e9e9e9, #c2c2c2);
+	--resizeBar-bgc-vertical: linear-gradient(to right bottom, #ffe7c4, #ffd9b4, #e3b085, #ffd1a9);
+	--resizeBar-bgc-horizontal: linear-gradient(to right bottom, #ffe7c4, #ffd9b4, #e3b085, #ffd1a9);
+	--resizeBar-border-vertical: solid 1px #5f4d3a88;
+	--resizeBar-border-horizontal: solid 1px #5f4d3a88;
+}

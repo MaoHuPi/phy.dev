@@ -1,0 +1,45 @@
+/* all */
+* {
+	margin: 0px;
+	padding: 0px;
+	border: none;
+	box-sizing: border-box;
+	outline: none;
+	user-select: none;
+	font-size: 20px;
+	font-family: 'Courier New', Courier, monospace;
+	scrollbar-color: var(--scrollbar-fgc) var(--scrollbar-bgc);
+	scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+	width: 5px;
+	height: 5px;
+	background-color: var(--scrollbar-bgc);
+	/* or add it to the track */
+}
+
+*::-webkit-scrollbar-thumb {
+	background: var(--scrollbar-fgc);
+}
+
+/* tag */
+html,
+body {
+	width: 100vw;
+	height: 100vh;
+	overflow: hidden;
+	background: var(--bgc);
+}
+
+fieldset {
+	border: var(--fieldset-border);
+	padding: 10px;
+	margin: 10px 10px 0px 10px;
+}
+
+legend {
+	margin: auto;
+	color: var(--legend-fgc);
+	font-size: 20px;
+}
