@@ -7,10 +7,10 @@ function fileIOInit({changeProjectName, importProject}) {
     let developerMod = false;
 
     let pickerTitle = 'Phy Dev',
-        // pickerAcceptMime = 'application/zip',
-        pickerAcceptMime = 'application/phy',
-        // pickerAcceptExtension = ['.phy', '.zip'];
-        pickerAcceptExtension = ['.phy'];
+        pickerAcceptMime = 'application/zip',
+        // pickerAcceptMime = 'application/phy',
+        pickerAcceptExtension = ['.phy', '.zip'];
+        // pickerAcceptExtension = ['.phy'];
     let pickerOptions = {
         excludeAcceptAllOption: true,
         id: 'PhyDevProject',
