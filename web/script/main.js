@@ -787,7 +787,7 @@
 									job = prepareJob({
 										formula: systemFunction.f,
 										startTime: startTime,
-										endTime: formValue.endTime >= 0 ? formValue.endTime : undefined,
+										endTime: formValue.endTime >= 0 ? formValue.endTime : false,
 										initialValue: JSON.parse(formValue.initialValue),
 										initialH: formValue.hValue,
 										epsilon: formValue.epsilonValue,

@@ -140,7 +140,7 @@ const RKMethodDict = {
 function prepareJob({
     formula,
     startTime = 0,
-    endTime = 60,
+    endTime = false,
     initialValue,
     initialH = 0.1,
     epsilon = 0.01,
@@ -154,7 +154,7 @@ function prepareJob({
             let h = ${initialH};
             let time = ${startTime};
             let initialValue = ${JSON.stringify(initialValue)};
-            while(${endTime !== undefined ? `time <= ${endTime}` : 'true'}){
+            while(${endTime !== false ? `time <= ${endTime}` : 'true'}){
                 let result = ${method}(${formula}, time, undefined, initialValue, h, ${epsilon}, 1);
                 h = result.h;
                 time = result.data[0][0];
