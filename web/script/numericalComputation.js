@@ -159,6 +159,7 @@ function prepareJob({
                 let result = ${method}(formula, time, undefined, initialValue, h, ${epsilon}, 1);
                 h = result.h;
                 time = result.data[0][0];
+                console.log(time);
                 initialValue = result.data[1][0];
                 yield { row: [result.data[0][0], ...result.data[1][0]], h: result.h };
             }

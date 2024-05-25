@@ -13,17 +13,19 @@ async function wait$(selector, secondEachCheck = 0.1) {
 		await waitTime(secondEachCheck);
 	}
 }
-let fileName = 'spinningTopWithOffsetCenterOfGravity_three';
+let fileName = '';
 async function test() {
-	let result = await fetch(`script/${fileName}.js`);
-	let systemFile = window.project.getFile(`${fileName}.js`, SystemFile);
-	systemFile.content = await result.text();
-
-	let event_change = new Event('change');
-	(await wait$('#folderPathBar-path')).dispatchEvent(event_change);
-
-	let event_dblclick = new Event('dblclick');
-	(await wait$('#fileGrid > div[type="system"]')).dispatchEvent(event_dblclick);
-
-	console.log('Test project loaded!');
+	if(fileName !== ''){
+		let result = await fetch(`script/${fileName}.js`);
+		let systemFile = window.project.getFile(`${fileName}.js`, SystemFile);
+		systemFile.content = await result.text();
+	
+		let event_change = new Event('change');
+		(await wait$('#folderPathBar-path')).dispatchEvent(event_change);
+	
+		let event_dblclick = new Event('dblclick');
+		(await wait$('#fileGrid > div[type="system"]')).dispatchEvent(event_dblclick);
+	
+		console.log('Test project loaded!');
+	}
 }
