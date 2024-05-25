@@ -139,7 +139,7 @@ class Project {
 					break;
 			}
 		}
-		for(let folderPath of this.folderList){
+		for (let folderPath of this.folderList) {
 			zip.file(folderPath + '/.occ.txt', 'occ');
 		}
 		return zip;

@@ -1,4 +1,12 @@
-(() => {
+(async () => {
+	let require = {};
+	let result = await fetch(`script/module.js`);
+	let moduleCode = await result.text();
+	require = new Function(`
+		${moduleCode}
+		return require;
+	`)();
+
 	const clearVarList = [];
 	const shared = {
 		clearVarAll: function clearVarAll() {
@@ -341,7 +349,7 @@
 		});
 		$('#folderPathBar-path').addEventListener('change', () => {
 			let pathText = $('#folderPathBar-path').value;
-			targetPath = pathText.split('/');
+			let targetPath = pathText.split('/');
 			if (targetPath[0] == 'Φ') targetPath.shift();
 			if (targetPath[targetPath.length - 1] == '') targetPath.pop();
 			if (targetPath.length == 0 || project.hasFolder(targetPath.join('/'))) {
@@ -688,6 +696,7 @@
 					let systemFunction = { f: undefined, render: undefined };
 					if (systemFile) {
 						let { q0, f, render } = new Function(`
+							const { require } = arguments[0];
 						    var q0 = [0];
 							function f(t, q) { return q; }
 							function render(cvs, ctx, t, q){}
@@ -695,7 +704,7 @@
 							${systemFile.content}
 
 							return({q0, f, render});
-						`)();
+						`)({ require });
 						systemFunction.q0 = q0;
 						form.initialValue.setValue(JSON.stringify(q0));
 						systemFunction.f = f;
@@ -721,11 +730,10 @@
 								}
 
 								formValue.targetPath = tidyTargetPath(formValue.targetPath);
-								form.targetPath.setValue(formValue.targetPath);
+								form.targetPath.setValue('Φ/' + formValue.targetPath);
 								if (formValue.outputMode.includes('record')) {
 									project.getFile(formValue.targetPath, DataFile).meta = JSON.stringify(formValue);
 								}
-
 
 								// to process the overwrite or continue
 								let startTime = 0;
@@ -946,4 +954,6 @@
 		methodButtons
 		return { openSubFile };
 	} share(attributeSystem(shared));
+
+	test();
 })();

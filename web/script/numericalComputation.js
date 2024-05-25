@@ -150,12 +150,13 @@ function prepareJob({
     if (synchronizeAndStepByStep) {
         return new Function(`
         ${butcherTableau2code(method, RKMethodDict[method].type, RKMethodDict[method].tableau)}
+        let {formula} = arguments[0];
         return (function* job(){
             let h = ${initialH};
             let time = ${startTime};
             let initialValue = ${JSON.stringify(initialValue)};
             while(${endTime !== false ? `time <= ${endTime}` : 'true'}){
-                let result = ${method}(${formula}, time, undefined, initialValue, h, ${epsilon}, 1);
+                let result = ${method}(formula, time, undefined, initialValue, h, ${epsilon}, 1);
                 h = result.h;
                 time = result.data[0][0];
                 initialValue = result.data[1][0];
@@ -163,15 +164,16 @@ function prepareJob({
             }
             return;
         })();
-        `)();
+        `)({ formula });
     } else {
         return new Function(`
         ${butcherTableau2code(method, RKMethodDict[method].type, RKMethodDict[method].tableau)}
+        let {formula} = arguments[0];
         return new Promise(resolve => {
-            let result = ${method}(${formula}, ${startTime}, ${endTime}, ${JSON.stringify(initialValue)}, ${initialH}, ${epsilon});
+            let result = ${method}(formula, ${startTime}, ${endTime}, ${JSON.stringify(initialValue)}, ${initialH}, ${epsilon});
             result.data[1].map((array, i) => array.splice(0, 0, result.data[0][i]));
             resolve({ csv: result.data[1], h: result.h });
         });
-        `)();
+        `)({ formula });
     }
 }

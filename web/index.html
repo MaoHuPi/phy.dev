@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en" theme="dark">
+
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,7 +13,17 @@
 	<script src="script/project.js"></script>
 	<script src="script/fileIO.js"></script>
 	<script src="script/numericalComputation.js"></script>
+	<script src="script/toTest.js"></script>
+	<script type="importmap">
+		{
+			"imports": {
+			"three": "https://cdn.jsdelivr.net/npm/three@<version>/build/three.module.js",
+			"three/addons/": "https://cdn.jsdelivr.net/npm/three@<version>/examples/jsm/"
+			}
+		}
+	</script>
 </head>
+
 <body>
 	<div id="panelGrid">
 		<div id="area-lt">
@@ -54,7 +65,7 @@
 	</div>
 	<div id="contextMenu"></div>
 	<div id="dropMask"></div>
-	<script src="script/main.js"></script>
-	<script src="script/test.js"></script>
+	<script src="script/main.js" type="module"></script>
 </body>
+
 </html>
