@@ -139,6 +139,7 @@ const RKMethodDict = {
 }
 function prepareJob({
     formula,
+    update = () => {},
     startTime = 0,
     endTime = false,
     initialValue,
@@ -150,7 +151,7 @@ function prepareJob({
     if (synchronizeAndStepByStep) {
         return new Function(`
         ${butcherTableau2code(method, RKMethodDict[method].type, RKMethodDict[method].tableau)}
-        let {formula} = arguments[0];
+        let {formula, update} = arguments[0];
         return (function* job(){
             let h = ${initialH};
             let time = ${startTime};
@@ -161,11 +162,12 @@ function prepareJob({
                 time = result.data[0][0];
                 console.log(time);
                 initialValue = result.data[1][0];
+                update(time, result.data[1][0]);
                 yield { row: [result.data[0][0], ...result.data[1][0]], h: result.h };
             }
             return;
         })();
-        `)({ formula });
+        `)({ formula, update });
     } else {
         return new Function(`
         ${butcherTableau2code(method, RKMethodDict[method].type, RKMethodDict[method].tableau)}

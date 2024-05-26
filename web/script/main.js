@@ -1,10 +1,10 @@
 (async () => {
-	let require = {};
+	let moduleDict = {};
 	let result = await fetch(`script/module.js`);
 	let moduleCode = await result.text();
-	require = new Function(`
+	moduleDict = new Function(`
 		${moduleCode}
-		return require;
+		return moduleDict;
 	`)();
 
 	const clearVarList = [];
@@ -694,212 +694,249 @@
 					// button
 					let systemFile = project.getFile(path);
 					let systemFunction = { f: undefined, render: undefined };
+					let playButton = $e('div');
+					let pasteButton = $e('div');
+					const systemExtendFunctionDict = {
+						require: function require(moduleName) {
+							return moduleName in moduleDict ? moduleDict[moduleName] : {};
+						},
+						stop: async function stop() { if (playButton.value) await playButtonClick(); },
+						start: async function play(formValueDict) {
+							if (playButton.value) await playButtonClick();
+							for (let key in formValueDict) {
+								if (key in form) {
+									form[key].setValue(formValueDict[key]);
+								}
+							}
+							if (!playButton.value) await playButtonClick();
+						},
+						counter: (function counter() {
+							let value = 0;
+							return {
+								get: () => value,
+								set: (newValue) => { value = newValue; },
+								next: () => { value++; }
+							};
+						})()
+					}
+					async function playButtonClick() {
+						playButton.value = !playButton.value;
+						if (playButton.value) {
+							playButton.innerText = 'stop';
+							if (systemFile) {
+								let { f, render, update } = new Function(`
+									const phydev = arguments[0];
+									function f(t, q) { return q; }
+									function render(cvs, ctx, t, q){}
+									function update(t, q){}
+		
+									${systemFile.content}
+		
+									return({f, render, update});
+								`)(systemExtendFunctionDict);
+								systemFunction.f = f;
+								systemFunction.render = render;
+								systemFunction.update = update;
+							}
+							if (!(systemFunction.f && systemFunction.render && systemFunction.update)) {
+								alert('There are some error in this "system(.js)" code!');
+								return;
+							}
+							let formValue = { ...form };
+							for (let key in form) {
+								formValue[key] = form[key].getValue();
+							}
+
+							let dataFile = project.getFile(formValue.targetPath);
+							if (formValue.targetPath == '' || (dataFile && dataFile.type !== DataFile)) {
+								formValue.targetPath = `data-${randomId()}`;
+							}
+
+							formValue.targetPath = tidyTargetPath(formValue.targetPath);
+							form.targetPath.setValue('Φ/' + formValue.targetPath);
+							if (formValue.outputMode.includes('record')) {
+								project.getFile(formValue.targetPath, DataFile).meta = JSON.stringify(formValue);
+							}
+
+							// to process the overwrite or continue
+							let startTime = 0;
+							let lastCsv = undefined;
+							if (formValue.storageMethod == 'continue') {
+								let subFile = project.getFile(formValue.targetPath);
+								if (subFile) {
+									let data;
+									try {
+										data = JSON.parse(subFile.meta);
+									} catch (error) { }
+									if (data) {
+										for (let key of inheritAttribute) {
+											if (key in data) {
+												form[key].setValue(data[key]);
+												formValue[key] = data[key];
+											}
+										}
+									}
+								}
+								let dataFile = project.getFile(formValue.targetPath);
+								if (dataFile) {
+									let csv = dataFile.content;
+									lastCsv = csv;
+									let data = csv.split('\n');
+									data = data[data.length - 1].split(',').map(s => parseFloat(s));
+									startTime = data.shift();
+									formValue.initialValue = JSON.stringify(data);
+								}
+							}
+							if (formValue.outputMode == 'record' && formValue.endTime >= 0) {
+								job = prepareJob({
+									formula: systemFunction.f,
+									update: systemFunction.update,
+									startTime: startTime,
+									endTime: formValue.endTime,
+									initialValue: JSON.parse(formValue.initialValue),
+									initialH: formValue.hValue,
+									epsilon: formValue.epsilonValue,
+									synchronizeAndStepByStep: false,
+									method: formValue.calculateMethod,
+								});
+								(async () => {
+									let localJob = job;
+									let localPlayButton = playButton;
+									result = await localJob;
+									if (!localJob.stoppedFlag) {
+										let dataFile = project.getFile(formValue.targetPath, DataFile);
+										dataFile.content = (lastCsv ? lastCsv + '\n' : '') + array2csv(result.csv);
+										formValue.hValue = result.h;
+										form.hValue.setValue(result.h);
+										dataFile.meta = JSON.stringify(formValue);
+										localPlayButton.value = false;
+										localPlayButton.innerText = 'start';
+										shared.folderPathChanged();
+										alert('Done!');
+									}
+								})();
+							} else {
+								job = prepareJob({
+									formula: systemFunction.f,
+									update: systemFunction.update,
+									startTime: startTime,
+									endTime: formValue.endTime >= 0 ? formValue.endTime : false,
+									initialValue: JSON.parse(formValue.initialValue),
+									initialH: formValue.hValue,
+									epsilon: formValue.epsilonValue,
+									synchronizeAndStepByStep: true,
+									method: formValue.calculateMethod,
+								});
+
+								let cvs = $('#viewCanvas');
+								let ctx = cvs.getContext('2d');
+								let dataArray = [];
+								let hValue = form.hValue;
+								let frame = () => { };
+								let localJob = job;
+								let localPlayButton = playButton;
+								switch (formValue.outputMode) {
+									case 'render + record':
+										frame = function () {
+											let result = localJob.next();
+											if (result.done || localJob.stoppedFlag) {
+												let dataFile = project.getFile(formValue.targetPath, DataFile);
+												dataFile.content = (lastCsv ? lastCsv + '\n' : '') + array2csv(dataArray);
+												formValue.hValue = hValue;
+												form.hValue.setValue(hValue);
+												dataFile.meta = JSON.stringify(formValue);
+												[cvs.width, cvs.height] = [1920, 1080];
+												cvs.style.setProperty('--frameWidth', cvs.width);
+												cvs.style.setProperty('--frameHeight', cvs.height);
+												if (localPlayButton.value) {
+													localPlayButton.value = false;
+													localPlayButton.innerText = 'start';
+												}
+												shared.folderPathChanged();
+											} else {
+												dataArray.push(result.value.row);
+												hValue = result.value.h;
+												let renderArgument = [...result.value.row];
+												let renderTime = renderArgument.shift();
+												systemFunction.render(cvs, ctx, renderTime, renderArgument);
+												cvs.style.setProperty('--frameWidth', cvs.width);
+												cvs.style.setProperty('--frameHeight', cvs.height);
+												setTimeout(frame, 30);
+											}
+										}
+										break;
+									case 'render':
+										frame = function () {
+											let result = localJob.next();
+											if (result.done || localJob.stoppedFlag) {
+												[cvs.width, cvs.height] = [1920, 1080];
+												cvs.style.setProperty('--frameWidth', cvs.width);
+												cvs.style.setProperty('--frameHeight', cvs.height);
+												if (localPlayButton.value) {
+													localPlayButton.value = false;
+													localPlayButton.innerText = 'start';
+												}
+											} else {
+												let renderArgument = [...result.value.row];
+												let renderTime = renderArgument.shift();
+												systemFunction.render(cvs, ctx, renderTime, renderArgument);
+												cvs.style.setProperty('--frameWidth', cvs.width);
+												cvs.style.setProperty('--frameHeight', cvs.height);
+												setTimeout(frame, 30);
+											}
+										}
+										break;
+									case 'record':
+										frame = function () {
+											let result = localJob.next();
+											if (result.done || localJob.stoppedFlag) {
+												let dataFile = project.getFile(formValue.targetPath, DataFile);
+												dataFile.content = array2csv(dataArray);
+												formValue.hValue = hValue;
+												form.hValue.setValue(hValue);
+												dataFile.content.meta = JSON.stringify(formValue);
+												if (localPlayButton.value) {
+													localPlayButton.value = false;
+													localPlayButton.innerText = 'start';
+												}
+												shared.folderPathChanged();
+											} else {
+												dataArray.push(result.value.row);
+												hValue = result.value.h;
+												setTimeout(frame, 1);
+											}
+										}
+										break;
+								}
+								frame();
+							}
+						} else {
+							if (job && !job.stoppedFlag) {
+								job.stoppedFlag = true;
+								job = undefined;
+							}
+							playButton.innerText = 'start';
+							let cvs = $('#viewCanvas');
+							[cvs.width, cvs.height] = [1920, 1080];
+							cvs.style.setProperty('--frameWidth', cvs.width);
+							cvs.style.setProperty('--frameHeight', cvs.height);
+						}
+					}
 					if (systemFile) {
-						let { q0, f, render } = new Function(`
-							const { require } = arguments[0];
+						let { q0 } = new Function(`
+							const phydev = arguments[0];
 						    var q0 = [0];
-							function f(t, q) { return q; }
-							function render(cvs, ctx, t, q){}
 
 							${systemFile.content}
 
-							return({q0, f, render});
-						`)({ require });
+							return({q0});
+						`)(systemExtendFunctionDict);
 						systemFunction.q0 = q0;
 						form.initialValue.setValue(JSON.stringify(q0));
-						systemFunction.f = f;
-						systemFunction.render = render;
 					}
-					let playButton = $e('div');
-					let pasteButton = $e('div');
 					playButton.value = false;
 					playButton.innerText = 'start';
-					playButton.addEventListener('click', async () => {
-						if (systemFunction.f && systemFunction.render) {
-							playButton.value = !playButton.value;
-							if (playButton.value) {
-								playButton.innerText = 'stop';
-								let formValue = { ...form };
-								for (let key in form) {
-									formValue[key] = form[key].getValue();
-								}
-
-								let dataFile = project.getFile(formValue.targetPath);
-								if (formValue.targetPath == '' || (dataFile && dataFile.type !== DataFile)) {
-									formValue.targetPath = `data-${randomId()}`;
-								}
-
-								formValue.targetPath = tidyTargetPath(formValue.targetPath);
-								form.targetPath.setValue('Φ/' + formValue.targetPath);
-								if (formValue.outputMode.includes('record')) {
-									project.getFile(formValue.targetPath, DataFile).meta = JSON.stringify(formValue);
-								}
-
-								// to process the overwrite or continue
-								let startTime = 0;
-								let lastCsv = undefined;
-								if (formValue.storageMethod == 'continue') {
-									let subFile = project.getFile(formValue.targetPath);
-									if (subFile) {
-										let data;
-										try {
-											data = JSON.parse(subFile.meta);
-										} catch (error) { }
-										if (data) {
-											for (let key of inheritAttribute) {
-												if (key in data) {
-													form[key].setValue(data[key]);
-													formValue[key] = data[key];
-												}
-											}
-										}
-									}
-									let dataFile = project.getFile(formValue.targetPath);
-									if (dataFile) {
-										let csv = dataFile.content;
-										lastCsv = csv;
-										let data = csv.split('\n');
-										data = data[data.length - 1].split(',').map(s => parseFloat(s));
-										startTime = data.shift();
-										formValue.initialValue = JSON.stringify(data);
-									}
-								}
-								if (formValue.outputMode == 'record' && formValue.endTime >= 0) {
-									job = prepareJob({
-										formula: systemFunction.f,
-										startTime: startTime,
-										endTime: formValue.endTime,
-										initialValue: JSON.parse(formValue.initialValue),
-										initialH: formValue.hValue,
-										epsilon: formValue.epsilonValue,
-										synchronizeAndStepByStep: false,
-										method: formValue.calculateMethod,
-									});
-									(async () => {
-										let localJob = job;
-										let localPlayButton = playButton;
-										result = await localJob;
-										if (!localJob.stoppedFlag) {
-											let dataFile = project.getFile(formValue.targetPath, DataFile);
-											dataFile.content = (lastCsv ? lastCsv + '\n' : '') + array2csv(result.csv);
-											formValue.hValue = result.h;
-											form.hValue.setValue(result.h);
-											dataFile.meta = JSON.stringify(formValue);
-											localPlayButton.value = false;
-											localPlayButton.innerText = 'start';
-											shared.folderPathChanged();
-											alert('Done!');
-										}
-									})();
-								} else {
-									job = prepareJob({
-										formula: systemFunction.f,
-										startTime: startTime,
-										endTime: formValue.endTime >= 0 ? formValue.endTime : false,
-										initialValue: JSON.parse(formValue.initialValue),
-										initialH: formValue.hValue,
-										epsilon: formValue.epsilonValue,
-										synchronizeAndStepByStep: true,
-										method: formValue.calculateMethod,
-									});
-
-									let cvs = $('#viewCanvas');
-									let ctx = cvs.getContext('2d');
-									let dataArray = [];
-									let hValue = form.hValue;
-									let frame = () => { };
-									let localJob = job;
-									let localPlayButton = playButton;
-									switch (formValue.outputMode) {
-										case 'render + record':
-											frame = function () {
-												let result = localJob.next();
-												if (result.done || localJob.stoppedFlag) {
-													let dataFile = project.getFile(formValue.targetPath, DataFile);
-													dataFile.content = (lastCsv ? lastCsv + '\n' : '') + array2csv(dataArray);
-													formValue.hValue = hValue;
-													form.hValue.setValue(hValue);
-													dataFile.meta = JSON.stringify(formValue);
-													[cvs.width, cvs.height] = [1920, 1080];
-													cvs.style.setProperty('--frameWidth', cvs.width);
-													cvs.style.setProperty('--frameHeight', cvs.height);
-													if (localPlayButton.value) {
-														localPlayButton.value = false;
-														localPlayButton.innerText = 'start';
-													}
-													shared.folderPathChanged();
-												} else {
-													dataArray.push(result.value.row);
-													hValue = result.value.h;
-													let renderArgument = [...result.value.row];
-													let renderTime = renderArgument.shift();
-													systemFunction.render(cvs, ctx, renderTime, renderArgument);
-													cvs.style.setProperty('--frameWidth', cvs.width);
-													cvs.style.setProperty('--frameHeight', cvs.height);
-													setTimeout(frame, 30);
-												}
-											}
-											break;
-										case 'render':
-											frame = function () {
-												let result = localJob.next();
-												if (result.done || localJob.stoppedFlag) {
-													[cvs.width, cvs.height] = [1920, 1080];
-													cvs.style.setProperty('--frameWidth', cvs.width);
-													cvs.style.setProperty('--frameHeight', cvs.height);
-													if (localPlayButton.value) {
-														localPlayButton.value = false;
-														localPlayButton.innerText = 'start';
-													}
-												} else {
-													let renderArgument = [...result.value.row];
-													let renderTime = renderArgument.shift();
-													systemFunction.render(cvs, ctx, renderTime, renderArgument);
-													cvs.style.setProperty('--frameWidth', cvs.width);
-													cvs.style.setProperty('--frameHeight', cvs.height);
-													setTimeout(frame, 30);
-												}
-											}
-											break;
-										case 'record':
-											frame = function () {
-												let result = localJob.next();
-												if (result.done || localJob.stoppedFlag) {
-													let dataFile = project.getFile(formValue.targetPath, DataFile);
-													dataFile.content = array2csv(dataArray);
-													formValue.hValue = hValue;
-													form.hValue.setValue(hValue);
-													dataFile.content.meta = JSON.stringify(formValue);
-													if (localPlayButton.value) {
-														localPlayButton.value = false;
-														localPlayButton.innerText = 'start';
-													}
-													shared.folderPathChanged();
-												} else {
-													dataArray.push(result.value.row);
-													hValue = result.value.h;
-													setTimeout(frame, 1);
-												}
-											}
-											break;
-									}
-									frame();
-								}
-							} else {
-								if (job && !job.stoppedFlag) {
-									job.stoppedFlag = true;
-									job = undefined;
-								}
-								playButton.innerText = 'start';
-								let cvs = $('#viewCanvas');
-								[cvs.width, cvs.height] = [1920, 1080];
-								cvs.style.setProperty('--frameWidth', cvs.width);
-								cvs.style.setProperty('--frameHeight', cvs.height);
-							}
-						} else {
-							alert('There are some error in this "system(.js)" code!');
-						}
-					});
+					playButton.addEventListener('click', playButtonClick);
 					pasteButton.innerText = 'paste';
 					pasteButton.addEventListener('click', () => {
 						navigator.clipboard.readText()
