@@ -894,7 +894,7 @@
 												dataFile.content = array2csv(dataArray);
 												formValue.hValue = hValue;
 												form.hValue.setValue(hValue);
-												dataFile.content.meta = JSON.stringify(formValue);
+												dataFile.meta = JSON.stringify(formValue);
 												if (localPlayButton.value) {
 													localPlayButton.value = false;
 													localPlayButton.innerText = 'start';

@@ -13,7 +13,7 @@ async function wait$(selector, secondEachCheck = 0.1) {
 		await waitTime(secondEachCheck);
 	}
 }
-let fileName = '';
+let fileName = 'spinningTopWithOffsetCenterOfGravity_auto_center';
 async function test() {
 	if(fileName !== ''){
 		let result = await fetch(`script/${fileName}.js`);
