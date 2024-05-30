@@ -693,7 +693,7 @@
 					});
 					// button
 					let systemFile = project.getFile(path);
-					let systemFunction = { f: undefined, render: undefined };
+					let systemFunction = { parse: undefined, f: undefined, render: undefined, update: undefined, done: undefined };
 					let playButton = $e('div');
 					let pasteButton = $e('div');
 					const systemExtendFunctionDict = {
@@ -724,19 +724,23 @@
 						if (playButton.value) {
 							playButton.innerText = 'stop';
 							if (systemFile) {
-								let { f, render, update } = new Function(`
+								let { parse, f, render, update, done } = new Function(`
 									const phydev = arguments[0];
+									function parse(q){ return q; }
 									function f(t, q) { return q; }
 									function render(cvs, ctx, t, q){}
 									function update(t, q){}
+									function done(t, q){}
 		
 									${systemFile.content}
 		
-									return({f, render, update});
+									return({ parse, f, render, update, done });
 								`)(systemExtendFunctionDict);
+								systemFunction.parse = parse;
 								systemFunction.f = f;
 								systemFunction.render = render;
 								systemFunction.update = update;
+								systemFunction.done = done;
 							}
 							if (!(systemFunction.f && systemFunction.render && systemFunction.update)) {
 								alert('There are some error in this "system(.js)" code!');
@@ -793,7 +797,7 @@
 									update: systemFunction.update,
 									startTime: startTime,
 									endTime: formValue.endTime,
-									initialValue: JSON.parse(formValue.initialValue),
+									initialValue: systemFunction.parse(JSON.parse(formValue.initialValue)),
 									initialH: formValue.hValue,
 									epsilon: formValue.epsilonValue,
 									synchronizeAndStepByStep: false,
@@ -812,7 +816,9 @@
 										localPlayButton.value = false;
 										localPlayButton.innerText = 'start';
 										shared.folderPathChanged();
-										alert('Done!');
+										// alert('Done!');
+										let row = [...result.csv[result.csv.length - 1]]
+										systemFunction.done(row.shift(), row);
 									}
 								})();
 							} else {
@@ -821,7 +827,7 @@
 									update: systemFunction.update,
 									startTime: startTime,
 									endTime: formValue.endTime >= 0 ? formValue.endTime : false,
-									initialValue: JSON.parse(formValue.initialValue),
+									initialValue: systemFunction.parse(JSON.parse(formValue.initialValue)),
 									initialH: formValue.hValue,
 									epsilon: formValue.epsilonValue,
 									synchronizeAndStepByStep: true,

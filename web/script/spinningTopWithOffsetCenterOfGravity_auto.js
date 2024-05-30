@@ -162,6 +162,55 @@ three_line.applyMatrix4(line_rotation_matrix);
 
 // main method
 
+function parse(q) { // parse initial value
+	let m_ball = 0.001 * q[10],
+		m_total = m_nib + m_shaft + m_ring + m_ball,
+		d = q[11];
+	let [s1, c1, s2, c2, s3, c3] = [Math.sin(q[0]), Math.cos(q[0]), Math.sin(q[1]), Math.cos(q[1]), Math.sin(q[2]), Math.cos(q[2])];
+
+	// I
+	let [I_xx_bar, I_yy_bar, I_zz_bar, I_xz_bar] = [
+		(1 / 6) * m_nib * (r_shaft ** 2 + 3 * h_nib ** 2) + (1 / 12) * m_shaft * (h_shaft ** 2 + 3 * r_shaft ** 2) + m_shaft * (h_nib + (1 / 2) * h_shaft) ** 2 + (1 / 12) * m_ring * (h_ring ** 2 + 3 * r_ring ** 2) + m_ring * h ** 2 + (2 / 5) * m_ball * r_ball ** 2 + m_ball * h ** 2,
+		(1 / 6) * m_nib * (r_shaft ** 2 + 3 * h_nib ** 2) + (1 / 12) * m_shaft * (h_shaft ** 2 + 3 * r_shaft ** 2) + m_shaft * (h_nib + (1 / 2) * h_shaft) ** 2 + (1 / 12) * m_ring * (h_ring ** 2 + 3 * r_ring ** 2) + m_ring * h ** 2 + (2 / 5) * m_ball * r_ball ** 2 + m_ball * (d ** 2 + h ** 2),
+		(1 / 3) * m_nib * r_shaft ** 2 + (1 / 2) * m_shaft * r_shaft ** 2 + (1 / 2) * m_ring * r_ring ** 2 + (2 / 5) * m_ball * r_ball ** 2 + m_ball * d ** 2,
+		-m_ball * d * h
+	];
+	let theta_bar = Math.atan2(-2 * I_xz_bar / Math.sqrt((I_xx_bar - I_zz_bar) ** 2 + (2 * I_xz_bar) ** 2), (I_xx_bar - I_zz_bar) / Math.sqrt((I_xx_bar - I_zz_bar) ** 2 + (2 * I_xz_bar) ** 2)) / 2;
+	let [s_bar, c_bar] = [Math.sin(theta_bar), Math.cos(theta_bar)];
+	let rot2fixed = [
+		[c1 * c3 - s1 * c2 * s3, -c1 * s3 - s1 * c2 * c3, s1 * s2],
+		[s1 * c3 + c1 * c2 * s3, -s1 * s3 + c1 * c2 * c3, -c1 * s2],
+		[s2 * s3, s2 * c3, c2]
+	];
+	let bar2rot = [
+		[c_bar, 0, -s_bar],
+		[0, 1, 0],
+		[s_bar, 0, c_bar]
+	];
+
+	// parse theta i
+	let rot2fixed_new = Matrix.pro(rot2fixed, Matrix.inv(bar2rot));
+	q[1] = Math.acos(rot2fixed_new[2][2]);
+	q[2] = Math.atan2(
+		rot2fixed_new[2][0] / Math.sin(q[1]),
+		rot2fixed_new[2][1] / Math.sin(q[1])
+	);
+	q[0] = Math.atan2(
+		rot2fixed_new[0][2] / Math.sin(q[1]),
+		-rot2fixed_new[1][2] / Math.sin(q[1])
+	);
+
+	// parse omega i
+	[s1, c1, s2, c2, s3, c3] = [Math.sin(q[0]), Math.cos(q[0]), Math.sin(q[1]), Math.cos(q[1]), Math.sin(q[2]), Math.cos(q[2])];
+	let omega = [q[3] * s3 * s2 + q[4] * c3, q[3] * c3 * s2 - q[4] * s3, q[3] * c2 + q[5]];
+	let omega_new = Matrix.pro(bar2rot, omega.map(n => [n])).map(([n]) => n);
+	q[3] = (s3 * omega_new[0] + c3 * omega_new[1]) / s2;
+	q[5] = omega_new[2] - q[3] * c2;
+	q[4] = (omega_new[0] - q[3] * s3 * s2) / c3;
+
+	return q;
+}
+
 function f(t, q) {
 	// ref:
 	// https://zh.wikipedia.org/zh-tw/%E8%BD%89%E5%8B%95%E6%85%A3%E9%87%8F%E5%88%97%E8%A1%A8
@@ -379,28 +428,27 @@ let valueList = (
 		.map((_, i) => min + step * i)
 		.map(n => n / div)
 )(1, 20, 1, 10);
-function generateFormValueDict(index) {
+function generateFormValueDict(mode, index) {
 	let initialValue = [...q0];
-	initialValue[6] = valueList[index % valueList.length];
-	initialValue[7] = index > (valueList.length - 1) ? 0 : 0.5;
+	initialValue[10] = valueList[index % valueList.length];
+	initialValue[11] = index > (valueList.length - 1) ? 0 : 0.5;
 	return {
-		targetPath: `Φ/data_${index > (valueList.length - 1) ? 'center' : 'offset'}_${initialValue[6]}g`,
+		targetPath: `Φ/data_${index > (valueList.length - 1) ? 'center' : 'offset'}_${initialValue[10]}g`,
 		storageMethod: 'overwrite',
 		calculateMethod: 'emb_RKF45',
 		// calculateMethod: 'exp_ForwardEuler',
 		initialValue: JSON.stringify(initialValue),
 		hValue: 0.01,
 		epsilonValue: 0.001,
-		endTime: -1,
-		outputMode: 'render + record'
-		// outputMode: 'record'
+		endTime: mode == 'done' ? 60 * 1.5 : -1,
+		outputMode: mode == 'done' ? 'record' : 'render + record'
 	};
 }
 function update(t, q) {
-	let counterValue = phydev.counter.get()
+	let counterValue = phydev.counter.get();
 	if (counterValue == 0) {
 		phydev.stop().then(() => {
-			phydev.start(generateFormValueDict(0));
+			phydev.start(generateFormValueDict('update', 0));
 		});
 		phydev.counter.next();
 	}
@@ -411,7 +459,7 @@ function update(t, q) {
 				phydev.stop();
 			} else {
 				phydev.stop().then(() => {
-					phydev.start(generateFormValueDict(Math.round(counterValue / 2)));
+					phydev.start(generateFormValueDict('update', Math.round(counterValue / 2)));
 				});
 				phydev.counter.next();
 			}
@@ -423,10 +471,41 @@ function update(t, q) {
 		}
 	}
 }
+function done(t, q) {
+	console.log('done!');
+	let counterValue = phydev.counter.get();
+	if (counterValue == 0) {
+		phydev.stop().then(() => {
+			setTimeout(() => {
+				phydev.start(generateFormValueDict('done', 0));
+				phydev.counter.next();
+			}, 30);
+		});
+	}
+	if (counterValue > (valueList.length * 2 - 1)) {
+		phydev.stop();
+	} else {
+		phydev.stop().then(() => {
+			setTimeout(() => {
+				phydev.start(generateFormValueDict('done', counterValue));
+				phydev.counter.next();
+			}, 30);
+		});
+	}
+}
 
 /*
-[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0].map(n => {
-	let rows = project.subFileDict[`data_center_${n}g`].content.split('\n');
-	return rows[rows.length-1].split(',')[0];
-})
+copy([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2].map(n => {
+	let rows = project.subFileDict[`data_offset_${n}g`].content.split('\n');
+	return n + '\t' + rows[rows.length-1].split(',')[0];
+}).join('\n'));
+ */
+
+/*
+copy([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2].map(n => {
+	let rows = project.subFileDict[`data_offset_${n}g`].content.split('\n');
+	let lastIndex = rows.map(row => row.replace(',', '<|>').split('<|>')[1]).reduce((count, data) => [typeof count === 'string' ? (count == data ? 0 : 1) : count[0] + (count[1] == data ? 0 : 1), data])[0];
+	console.log(rows[lastIndex-1], rows[lastIndex], rows[lastIndex+1]);
+	return n + '\t' + rows[lastIndex].split(',')[0];
+}).join('\n'));
  */
