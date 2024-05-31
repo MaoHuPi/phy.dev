@@ -427,7 +427,7 @@ let valueList = (
 		.fill(0)
 		.map((_, i) => min + step * i)
 		.map(n => n / div)
-)(1, 20, 1, 10);
+)(8, 10, 1, 10);
 function generateFormValueDict(mode, index) {
 	let initialValue = [...q0];
 	initialValue[10] = valueList[index % valueList.length];
