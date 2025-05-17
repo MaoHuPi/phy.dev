@@ -13,7 +13,8 @@ async function wait$(selector, secondEachCheck = 0.1) {
 		await waitTime(secondEachCheck);
 	}
 }
-let fileName = 'spinningTopWithOffsetCenterOfGravity_auto';
+// let fileName = 'test_gol';
+let fileName = 'adiabaticPistonDynamicsUnderAsymmetricHeatingOfIdealGases';
 async function test() {
 	if(fileName !== ''){
 		let result = await fetch(`script/${fileName}.js`);

@@ -467,7 +467,7 @@
 				outputMode: {
 					type: 'select',
 					label: 'output mode',
-					data: ['render', 'record', 'render + record'],
+					data: ['render', 'record', 'render + record', 'render to video'],
 					default: 'render + record'
 				}
 			},
@@ -719,6 +719,7 @@
 							};
 						})()
 					}
+					let renderRecorder;
 					async function playButtonClick() {
 						playButton.value = !playButton.value;
 						if (playButton.value) {
@@ -734,7 +735,7 @@
 		
 									${systemFile.content}
 		
-									return({ parse, f, render, update, done });
+									return { parse, f, render, update, done } ;
 								`)(systemExtendFunctionDict);
 								systemFunction.parse = parse;
 								systemFunction.f = f;
@@ -835,7 +836,7 @@
 								});
 
 								let cvs = $('#viewCanvas');
-								let ctx = cvs.getContext('2d');
+								let ctx = cvs.getContext('2d', { colorSpace: "srgb" });
 								let dataArray = [];
 								let hValue = form.hValue;
 								let frame = () => { };
@@ -892,6 +893,45 @@
 											}
 										}
 										break;
+									case 'render to video':
+										// 以前從論壇找到的code，至於是哪一篇，現已經不曉得了，日後有找到原出處會再把來源貼在這
+										function exportVid(blob) {
+											const a = document.createElement('a');
+											a.download = 'myvid.webm';
+											a.href = URL.createObjectURL(blob);
+											document.body.appendChild(a);
+											a.click();
+											a.remove();
+										}
+										const chunks = []; // here we will store our recorded media chunks (Blobs)
+										const stream = cvs.captureStream(); // grab our canvas MediaStream
+										renderRecorder = new MediaRecorder(stream); // init the recorder
+										// every time the recorder has new data, we will store it in our array
+										renderRecorder.ondataavailable = e => chunks.push(e.data);
+										// only when the recorder stops, we construct a complete Blob from all the chunks
+										renderRecorder.onstop = e => exportVid(new Blob(chunks, { type: 'video/webm' }));
+										renderRecorder.start();
+
+										frame = function () {
+											let result = localJob.next();
+											if (result.done || localJob.stoppedFlag) {
+												[cvs.width, cvs.height] = [1920, 1080];
+												cvs.style.setProperty('--frameWidth', cvs.width);
+												cvs.style.setProperty('--frameHeight', cvs.height);
+												if (localPlayButton.value) {
+													localPlayButton.value = false;
+													localPlayButton.innerText = 'start';
+												}
+											} else {
+												let renderArgument = [...result.value.row];
+												let renderTime = renderArgument.shift();
+												systemFunction.render(cvs, ctx, renderTime, renderArgument);
+												cvs.style.setProperty('--frameWidth', cvs.width);
+												cvs.style.setProperty('--frameHeight', cvs.height);
+												setTimeout(frame, 30);
+											}
+										}
+										break;
 									case 'record':
 										frame = function () {
 											let result = localJob.next();
@@ -926,6 +966,10 @@
 							[cvs.width, cvs.height] = [1920, 1080];
 							cvs.style.setProperty('--frameWidth', cvs.width);
 							cvs.style.setProperty('--frameHeight', cvs.height);
+							if(renderRecorder && 'stop' in renderRecorder){
+								renderRecorder.stop();
+								renderRecorder = undefined;
+							}
 						}
 					}
 					if (systemFile) {
@@ -935,7 +979,7 @@
 
 							${systemFile.content}
 
-							return({q0});
+							return { q0 } ;
 						`)(systemExtendFunctionDict);
 						systemFunction.q0 = q0;
 						form.initialValue.setValue(JSON.stringify(q0));
