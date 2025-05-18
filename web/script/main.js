@@ -922,6 +922,10 @@
 													localPlayButton.value = false;
 													localPlayButton.innerText = 'start';
 												}
+												if (renderRecorder && 'stop' in renderRecorder) {
+													renderRecorder.stop();
+													renderRecorder = undefined;
+												}
 											} else {
 												let renderArgument = [...result.value.row];
 												let renderTime = renderArgument.shift();
@@ -966,7 +970,7 @@
 							[cvs.width, cvs.height] = [1920, 1080];
 							cvs.style.setProperty('--frameWidth', cvs.width);
 							cvs.style.setProperty('--frameHeight', cvs.height);
-							if(renderRecorder && 'stop' in renderRecorder){
+							if (renderRecorder && 'stop' in renderRecorder) {
 								renderRecorder.stop();
 								renderRecorder = undefined;
 							}

@@ -13,8 +13,7 @@ async function wait$(selector, secondEachCheck = 0.1) {
 		await waitTime(secondEachCheck);
 	}
 }
-// let fileName = 'test_gol';
-let fileName = 'adiabaticPistonDynamicsUnderAsymmetricHeatingOfIdealGases';
+let fileName = 'test_gameOfLife';
 async function test() {
 	if(fileName !== ''){
 		let result = await fetch(`script/${fileName}.js`);
