@@ -13,10 +13,10 @@ async function wait$(selector, secondEachCheck = 0.1) {
 		await waitTime(secondEachCheck);
 	}
 }
-let fileName = 'test_gameOfLife';
+let fileName = 'test_gameOfLife'; // 'test_gameOfLife';
 async function test() {
 	if(fileName !== ''){
-		let result = await fetch(`script/${fileName}.js`);
+		let result = await fetch(`test/${fileName}.js`);
 		let systemFile = window.project.getFile(`${fileName}.js`, SystemFile);
 		systemFile.content = await result.text();
 	

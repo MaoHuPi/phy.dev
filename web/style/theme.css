@@ -45,6 +45,12 @@ html {
 	--methodButtons-button-bgc: #00000055;
 	--methodButtons-button-fgc-hover: black;
 	--methodButtons-button-bgc-hover: var(--color2);
+	--controlPanel-bgc: black;
+	--animateControl-toggleBar-bgc: gray;
+	--animateControl-toggleThumb-bgc: ghostwhite;
+	--dataControl-label-fgc: white;
+	--dataControl-input-fgc: white;
+	--dataControl-input-bgc: #ffffff55;
 }
 
 html[theme="bright"] {

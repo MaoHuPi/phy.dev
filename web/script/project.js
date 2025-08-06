@@ -159,7 +159,7 @@ class DataFile {
 	constructor({ content = '', meta = '' } = {}) {
 		this.type = DataFile;
 		this.content = content;
-		this.meta = meta
+		this.meta = meta;
 	}
 	writeToZip() {
 

@@ -5,6 +5,7 @@
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Phy Dev</title>
+	<link rel="shortcut icon" href="image/favicon.ico" type="image/x-icon">
 	<link rel="stylesheet" href="style/basic.css">
 	<link rel="stylesheet" href="style/theme.css">
 	<link rel="stylesheet" href="style/style.css">
@@ -33,7 +34,20 @@
 			</div>
 			<div id="controlPanel">
 				<div id="controlPanel-system"></div>
-				<div id="controlPanel-data"></div>
+				<div id="controlPanel-data">
+					<div id="dataControl">
+						<div class="dataControl-label">x: </div>
+						<input id="dataControl-inputX"></input>
+						<div class="dataControl-label">; y: </div>
+						<input id="dataControl-inputY"></input>
+					</div>
+					<div id="animateControl">
+						<div id="animateControl-playButton"></div>
+						<div id="animateControl-toggleBar">
+							<div id="animateControl-toggleThumb"></div>
+						</div>
+					</div>
+				</div>
 				<div id="controlPanel-image"></div>
 			</div>
 		</div>

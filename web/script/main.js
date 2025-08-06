@@ -472,9 +472,9 @@
 				}
 			},
 			data: {
-				targetPath: {
+				systemPath: {
 					type: 'input(text)',
-					label: 'file path',
+					label: 'system path',
 					readOnly: true
 				},
 				calculateMethod: {
@@ -640,7 +640,10 @@
 			return component;
 		}
 		let job = undefined;
+		let animateHandler = undefined;
 		function openSubFile(type, path) {
+			if (animateHandler !== undefined) animateHandler = undefined;
+
 			attributePanel.innerHTML = '';
 			methodButtons.innerHTML = '';
 			let cvs = $('#viewCanvas');
@@ -668,6 +671,8 @@
 			let inheritAttribute = ['calculateMethod', 'initialValue', 'hValue', 'epsilonValue'];
 			switch (type) {
 				case 'system':
+					//control panel
+					$('#area-lt').setAttribute('data-mode', 'system');
 					// attribute
 					form.storageMethod.addEventListener('change', function () {
 						if (this.getValue() == 'continue') {
@@ -760,7 +765,7 @@
 							formValue.targetPath = tidyTargetPath(formValue.targetPath);
 							form.targetPath.setValue('Φ/' + formValue.targetPath);
 							if (formValue.outputMode.includes('record')) {
-								project.getFile(formValue.targetPath, DataFile).meta = JSON.stringify(formValue);
+								project.getFile(formValue.targetPath, DataFile).meta = JSON.stringify({ ...formValue, systemPath: path });
 							}
 
 							// to process the overwrite or continue
@@ -813,7 +818,7 @@
 										dataFile.content = (lastCsv ? lastCsv + '\n' : '') + array2csv(result.csv);
 										formValue.hValue = result.h;
 										form.hValue.setValue(result.h);
-										dataFile.meta = JSON.stringify(formValue);
+										dataFile.meta = JSON.stringify({ ...formValue, systemPath: path });
 										localPlayButton.value = false;
 										localPlayButton.innerText = 'start';
 										shared.folderPathChanged();
@@ -851,7 +856,7 @@
 												dataFile.content = (lastCsv ? lastCsv + '\n' : '') + array2csv(dataArray);
 												formValue.hValue = hValue;
 												form.hValue.setValue(hValue);
-												dataFile.meta = JSON.stringify(formValue);
+												dataFile.meta = JSON.stringify({ ...formValue, systemPath: path });
 												[cvs.width, cvs.height] = [1920, 1080];
 												cvs.style.setProperty('--frameWidth', cvs.width);
 												cvs.style.setProperty('--frameHeight', cvs.height);
@@ -944,7 +949,7 @@
 												dataFile.content = array2csv(dataArray);
 												formValue.hValue = hValue;
 												form.hValue.setValue(hValue);
-												dataFile.meta = JSON.stringify(formValue);
+												dataFile.meta = JSON.stringify({ ...formValue, systemPath: path });
 												if (localPlayButton.value) {
 													localPlayButton.value = false;
 													localPlayButton.innerText = 'start';
@@ -1012,8 +1017,12 @@
 					methodButtons.appendChild(pasteButton);
 					break;
 				case 'data':
+					// control panel
+					$('#area-lt').setAttribute('data-mode', 'data-data');
+
 					// attribute
 					let dataFile = project.getFile(path);
+					let dataContent = [];
 					if (dataFile) {
 						let data;
 						try {
@@ -1021,15 +1030,151 @@
 						} catch (error) { }
 						if (data) {
 							for (let key in form) {
-								if (key in data && key !== 'targetPath') {
+								if (key in data && key !== 'systemPath') {
 									form[key].setValue(data[key]);
 								}
+								form.systemPath.setValue('Φ/' + data.systemPath);
 							}
 						}
+
+						dataContent = dataFile.content.split('\n').map(r => r.split(',').map(n => parseFloat(n)));
 					}
-					form.targetPath.setValue('Φ/' + path);
+					dataControlInputX.value = 't';
+					dataControlInputY.value = '0';
+					dataPlot(dataContent);
+					dataPlotUpdate();
 					// button
+					let animateButton = $e('div');
 					let copyButton = $e('div');
+					const systemExtendFunctionDictForAnimate = {
+						require: function require(moduleName) {
+							return moduleName in moduleDict ? moduleDict[moduleName] : {};
+						},
+						stop: () => { },
+						start: () => { },
+						counter: (function counter() {
+							let value = 0;
+							return {
+								get: () => value,
+								set: (newValue) => { value = newValue; },
+								next: () => { value++; }
+							};
+						})()
+					}
+					async function animateButtonClick() {
+						animateButton.value = !animateButton.value;
+						if (animateButton.value) {
+							animateButton.innerText = 'data';
+							$('#area-lt').setAttribute('data-mode', 'data-animate');
+
+							let formValue = { ...form };
+							for (let key in form) {
+								formValue[key] = form[key].getValue();
+							}
+
+							let systemFile = project.getFile(tidyTargetPath(formValue.systemPath));
+							if (formValue.systemPath == '' || (systemFile && systemFile.type !== SystemFile)) {
+								alert(`Could not find the system file "${formValue.systemPath}"!`);
+								return;
+							}
+							let systemFunction = {};
+							(() => {
+								let { parse, f, render, update, done } = new Function(`
+									const phydev = arguments[0];
+									function parse(q){ return q; }
+									function f(t, q) { return q; }
+									function render(cvs, ctx, t, q){}
+									function update(t, q){}
+									function done(t, q){}
+		
+									${systemFile.content}
+		
+									return { parse, f, render, update, done } ;
+								`)(systemExtendFunctionDictForAnimate);
+								systemFunction.parse = parse;
+								systemFunction.f = f;
+								systemFunction.render = render;
+								systemFunction.update = update;
+								systemFunction.done = done;
+							})();
+							if (!(systemFunction.f && systemFunction.render && systemFunction.update)) {
+								alert('There are some error in this "system(.js)" code!');
+								return;
+							}
+
+							let lastIndex = 0;
+							let animateControl = $('#animateControl');
+							animateControl.time = 0;
+							animateControl.min = dataContent[0][0];
+							animateControl.max = dataContent[dataContent.length - 1][0];
+							toggleBarUpdate();
+							let cvs = $('#viewCanvas');
+							let ctx = cvs.getContext('2d');
+							let currentHandler = Math.random();
+							animateHandler = currentHandler;
+							let frame = function () {
+								if (animateHandler !== currentHandler) return;
+								let renderTime = animateControl.time;
+								let renderArgument = [];
+
+								if (dataContent[0][0] < renderTime && dataContent[dataContent.length - 1][0] > renderTime) {
+									if (
+										dataContent[lastIndex][0] <= renderTime &&
+										(lastIndex + 1 == dataContent.length || dataContent[lastIndex + 1][0] > renderTime)
+									) {
+										// do nothing
+									} else if (
+										dataContent[lastIndex + 1][0] <= renderTime &&
+										(lastIndex + 2 == dataContent.length || dataContent[lastIndex + 2][0] > renderTime)
+									) {
+										lastIndex += 1;
+									} else {
+										for (let i = 0; i < dataContent.length; i++) {
+											if (
+												dataContent[i][0] <= renderTime &&
+												(i + 1 == dataContent.length || dataContent[i + 1][0] > renderTime)
+											) {
+												lastIndex = i;
+												break;
+											}
+										}
+									}
+
+									if (lastIndex + 1 <= dataContent.length - 1) {
+										let a1 = dataContent[lastIndex],
+											a2 = dataContent[lastIndex + 1];
+										renderArgument = a1.map((_, i) => a1[i] + (a2[i] - a1[i]) * (renderTime - a1[0]) / (a2[0] - a1[0]));
+										renderArgument.shift();
+									} else {
+										renderArgument = [...dataContent[lastIndex]];
+										renderArgument.shift();
+									}
+								} else {
+									if (dataContent[0][0] >= renderTime) renderArgument = [...dataContent[0]];
+									else renderArgument = [...dataContent[dataContent.length - 1]];
+									renderArgument.shift();
+								}
+
+								systemFunction.render(cvs, ctx, renderTime, renderArgument);
+								// console.log(renderArgument);
+								cvs.style.setProperty('--frameWidth', cvs.width);
+								cvs.style.setProperty('--frameHeight', cvs.height);
+								setTimeout(frame, 30);
+							}
+							frame();
+						} else {
+							if (animateHandler !== undefined) animateHandler = undefined;
+							animateButton.innerText = 'animate';
+							$('#area-lt').setAttribute('data-mode', 'data-data');
+							dataControlInputX.value = 't';
+							dataControlInputY.value = '0';
+							dataPlot(dataContent);
+							dataPlotUpdate();
+						}
+					}
+					animateButton.value = false;
+					animateButton.innerText = 'animate';
+					animateButton.addEventListener('click', animateButtonClick);
 					copyButton.innerText = 'copy';
 					copyButton.addEventListener('click', () => {
 						let formValue = { ...form };
@@ -1038,6 +1183,7 @@
 						}
 						navigator.clipboard.writeText(JSON.stringify(formValue));
 					});
+					methodButtons.appendChild(animateButton);
 					methodButtons.appendChild(copyButton);
 					break;
 			}
@@ -1045,6 +1191,169 @@
 		methodButtons
 		return { openSubFile };
 	} share(attributeSystem(shared));
+
+	// control panel
+	// data control
+	let dataControlInputX = $('#dataControl-inputX');
+	let dataControlInputY = $('#dataControl-inputY');
+	let currentData = [];
+	dataControlInputX.addEventListener('change', () => {
+		if (dataControlInputX.value.includes('t')) {
+			dataControlInputX.value = 't';
+		} else if (!/\d+/.test(dataControlInputX.value)) {
+			dataControlInputX.value = 't';
+		}
+		dataPlotUpdate();
+	});
+	dataControlInputY.addEventListener('change', () => {
+		if (dataControlInputY.value.includes('t')) {
+			dataControlInputY.value = 't';
+		} else if (!/\d+/.test(dataControlInputY.value)) {
+			dataControlInputY.value = '0';
+		}
+		dataPlotUpdate();
+	});
+	function dataPlot(data) {
+		currentData = data;
+	}
+	function dataPlotUpdate() {
+		let xIndex = dataControlInputX.value == 't' ? 0 : parseInt(dataControlInputX.value) + 1,
+			yIndex = dataControlInputY.value == 't' ? 0 : parseInt(dataControlInputY.value) + 1;
+		let xMin, xMax, yMin, yMax;
+
+		for (let r of currentData) {
+			if (isFinite(r[xIndex]) && isFinite(r[yIndex])) {
+				let deltaX = xMax - xMin, deltaY = yMax - yMin;
+				let backup = { xMin, xMax, yMin, yMax };
+				if (xMin == undefined || r[xIndex] < xMin) xMin = r[xIndex];
+				if (xMax == undefined || r[xIndex] > xMax) xMax = r[xIndex];
+				if (yMin == undefined || r[yIndex] < yMin) yMin = r[yIndex];
+				if (yMax == undefined || r[yIndex] > yMax) yMax = r[yIndex];
+				if (
+					(deltaX >= 1 && deltaY >= 1) &&
+					((xMax - xMin) / deltaX > 10 || (yMax - yMin) / deltaY > 10)
+				) {
+					xMin = backup.xMin;
+					xMax = backup.xMax;
+					yMin = backup.yMin;
+					yMax = backup.yMax;
+				}
+			}
+		}
+		let [width, height] = [1920, 1080];
+		let padding = 140;
+
+		let cvs = $('#viewCanvas'),
+			ctx = cvs.getContext('2d');
+		[cvs.width, cvs.height] = [width, height];
+		cvs.style.setProperty('--frameWidth', cvs.width);
+		cvs.style.setProperty('--frameHeight', cvs.height);
+		ctx.fillStyle = 'black';
+		ctx.fillRect(0, 0, width, height);
+
+		ctx.strokeStyle = 'white';
+		ctx.lineWidth = 5;
+		ctx.beginPath();
+		ctx.moveTo(padding, padding);
+		ctx.lineTo(padding, height - padding);
+		ctx.lineTo(width - padding, height - padding);
+		ctx.stroke();
+
+		ctx.fillStyle = 'white';
+		ctx.font = '50px Courier';
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.fillText(`${dataControlInputX.value} (data[${xIndex}])`, width / 2, height - padding / 2);
+		ctx.rotate(-Math.PI / 2);
+		ctx.fillText(`${dataControlInputY.value} (data[${yIndex}])`, -height / 2, padding / 2);
+		ctx.rotate(Math.PI / 2);
+
+		ctx.font = '30px Courier';
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'top';
+		ctx.fillText(Math.trunc(xMin * 1e2) / 1e2, padding, height - padding + ctx.lineWidth * 2);
+		ctx.fillText(Math.trunc(xMax * 1e2) / 1e2, width - padding, height - padding + ctx.lineWidth * 2);
+		ctx.textAlign = 'right';
+		ctx.textBaseline = 'middle';
+		ctx.fillText(Math.trunc(yMin * 1e2) / 1e2, padding - ctx.lineWidth * 2, height - padding);
+		ctx.fillText(Math.trunc(yMax * 1e2) / 1e2, padding - ctx.lineWidth * 2, padding);
+
+		ctx.strokeStyle = '#ffc354';
+		ctx.beginPath();
+		ctx.moveTo(
+			padding + (width - 2 * padding) * (currentData[0][xIndex] - xMin) / (xMax - xMin),
+			height - padding - (height - 2 * padding) * (currentData[0][yIndex] - yMin) / (yMax - yMin)
+		);
+		for (let r of currentData) {
+			ctx.lineTo(
+				padding + (width - 2 * padding) * (r[xIndex] - xMin) / (xMax - xMin),
+				height - padding - (height - 2 * padding) * (r[yIndex] - yMin) / (yMax - yMin)
+			);
+		}
+		ctx.stroke();
+	}
+	// animate control
+	let animateControl = $('#animateControl');
+	animateControl.time = 0;
+	animateControl.step = 30 / 1e3;
+	animateControl.min = 0;
+	animateControl.max = 0;
+	let animateControlPlayButton = $('#animateControl-playButton');
+	let animateControlToggleBar = $('#animateControl-toggleBar');
+	let playing = false;
+	animateControlPlayButton.addEventListener('click', () => {
+		playing = !playing;
+		playButtonUpdate();
+	});
+	function toggleBarUpdate() {
+		if (animateControl.time < animateControl.min) animateControl.time = animateControl.min;
+		else if (animateControl.time > animateControl.max) animateControl.time = animateControl.max;
+		animateControl.style.setProperty('--progress', (animateControl.time - animateControl.min) / (animateControl.max - animateControl.min));
+	}
+	function playButtonUpdate() {
+		animateControlPlayButton.setAttribute('playing', playing ? 'true' : 'false');
+		if (playing) {
+			toggleBarTick();
+		}
+	}
+	function toggleBarTick() {
+		if (playing) {
+			animateControl.time += animateControl.step;
+			if (animateControl.time >= animateControl.max) {
+				playing = false;
+				playButtonUpdate();
+			}
+			toggleBarUpdate();
+			setTimeout(toggleBarTick, animateControl.step * 1e3);
+		}
+	}
+	let toggling = false;
+	let toggleMouseX = 0;
+	let toggleBarRect = animateControlToggleBar.getBoundingClientRect();
+	animateControlToggleBar.addEventListener('mousedown', event => {
+		toggleMouseX = event.pageX;
+		toggling = true;
+		playing = false;
+		playButtonUpdate();
+		toggleBarRect = animateControlToggleBar.getBoundingClientRect();
+		toggleBarToggle();
+	});
+	window.addEventListener('mousemove', event => {
+		if (toggling) {
+			toggleMouseX = event.pageX;
+		}
+	});
+	window.addEventListener('mouseup', () => {
+		toggling = false;
+	});
+	function toggleBarToggle() {
+		if (toggling) {
+			animateControl.time = animateControl.min +
+				(animateControl.max - animateControl.min) * (toggleMouseX - toggleBarRect.left) / (toggleBarRect.right - toggleBarRect.left);
+			toggleBarUpdate();
+			setTimeout(toggleBarToggle, 30);
+		}
+	}
 
 	test();
 })();
